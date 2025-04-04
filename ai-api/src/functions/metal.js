@@ -69,9 +69,54 @@ async function createLiquidity(address) {
   return liquidity
 }
 
+async function launchToken(name, ticker, merchantAddress) {
+  try {
+    // Create token with default values for canLP and canDistribute
+    const tokenResponse = await createToken({
+      name,
+      symbol: ticker,
+      merchantAddress,
+      canDistribute: true,
+      canLP: true
+    });
+
+    if (!tokenResponse.jobId) {
+      throw new Error('Failed to create token: No jobId received');
+    }
+
+    // Wait for 20 seconds before checking status
+    await new Promise(resolve => setTimeout(resolve, 20000));
+
+    // Check status and retry if pending
+    let statusResponse;
+    do {
+      statusResponse = await getTokenCreationStatus(tokenResponse.jobId);
+      
+      if (statusResponse.status === 'pending') {
+        // Wait another 20 seconds before checking again
+        await new Promise(resolve => setTimeout(resolve, 20000));
+      } else if (statusResponse.status === 'success') {
+        // Create liquidity for the token
+        const liquidityResponse = await createLiquidity(statusResponse.tokenAddress);
+        return {
+          tokenCreation: statusResponse,
+          liquidityCreation: liquidityResponse
+        };
+      } else {
+        throw new Error(`Token creation failed with status: ${statusResponse.status}`);
+      }
+    } while (statusResponse.status === 'pending');
+
+  } catch (error) {
+    console.error('Error in launchToken:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   createToken,
   getTokenCreationStatus,
   distributeTokens,
-  createLiquidity
+  createLiquidity,
+  launchToken
 }; 

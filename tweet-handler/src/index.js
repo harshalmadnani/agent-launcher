@@ -5,7 +5,7 @@ const fs = require('fs');
 require('dotenv').config();
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3001;
 
 // Add CORS middleware
 
@@ -327,7 +327,7 @@ async function getTargetUserTweets(agentId) {
 // Function to get AI analysis for a tweet
 async function getAIAnalysis(tweetText) {
   try {
-    const response = await fetch('https://localhost:3000/analyze', {
+    const response = await fetch('https://agent-launcher.onrender.com/analyze', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -360,6 +360,11 @@ async function getAIAnalysis(tweetText) {
       analysis = data.data;
     } else if (typeof data.result === 'string') {
       analysis = data.result;
+    }
+
+    // Remove any text between <think> tags
+    if (analysis) {
+      analysis = analysis.replace(/<think>.*?<\/think>/gs, '');
     }
 
     // Validate the analysis

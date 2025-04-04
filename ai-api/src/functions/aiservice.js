@@ -32,10 +32,7 @@ const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
   try {
     const systemContent = `You are Xade AI's data fetcher. Your role is to identify and fetch the relevant data based on the user's question.
 - Deploy Token:
-  - createToken(params) - creates a new token with the given parameters
-  - getTokenCreationStatus(jobId) - returns the status of the token creation process
-  - distributeTokens(address, sendTo, amount) - distributes tokens to a specific address
-  - createLiquidity(address) - creates liquidity for a token
+  - launchToken(name, ticker, merchantAddress) - creates a new token with the given parameters (no need to add a merchant address if not given)
 
 - Social Analysis:
   - fetchSocialData(token) - returns detailed social metrics including:
@@ -160,7 +157,9 @@ Please analyze this data and provide insights that directly address the user's q
         messages: messages,
       });
 
-      return response.choices[0].message.content;
+      // Remove the think section from the response
+      const content = response.choices[0].message.content;
+      return content.replace(/```think\n[\s\S]*?\n```/g, '').trim();
     }
 
   } catch (error) {

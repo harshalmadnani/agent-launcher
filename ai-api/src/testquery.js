@@ -3,8 +3,8 @@ const axios = require('axios');
 async function testAnalyzeQuery() {
   try {
     const response = await axios.post('http://localhost:3000/analyze', {
-      query: "Deploy a token with the same name as the most trending token",
-      systemPrompt: "You are a helpful AI assistant that provides cryptocurrency analysis. Please provide a detailed analysis of the requested cryptocurrency data.",
+      query: "Deploy a token with the the name taipei and ticker TPEI",
+      systemPrompt: "You are a helpful AI assistant that provides cryptocurrency analysis.Please keep your response under 200 characters",
       model: "deepseek-r1-distill-llama-70b"
     });
 

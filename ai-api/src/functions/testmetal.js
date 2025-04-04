@@ -34,6 +34,15 @@ async function testMetalFunctions() {
     const liquidityResult = await metal.createLiquidity(tokenAddress);
     console.log('Create Liquidity Result:', liquidityResult);
 
+    // Test launchToken
+    console.log('\n5. Testing launchToken...');
+    const launchResult = await metal.launchToken(
+      'Launch Test Token',
+      'LTT',
+      '0xabcdef1234567890abcdef1234567890abcdef12'
+    );
+    console.log('Launch Token Result:', launchResult);
+
   } catch (error) {
     console.error('Error testing Metal functions:', error);
   }
