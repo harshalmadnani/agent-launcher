@@ -64,7 +64,12 @@ const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
     * Interaction metrics (24h and total)
   - fetchSocialData(token) - returns detailed social metrics
 
-
+- Portfolio Data:
+  - getPortfolioValueChart(addresses, chainId, timerange, useCache) - returns a chart of the portfolio value over time
+  - getNFTsByAddress(address, chainIds) - returns a list of NFTs owned by an address  
+  - getCurrentValue(walletAddress, chainId) - returns the current value of a wallet
+  - getProfitAndLoss(walletAddress, chainId, fromTimestamp, toTimestamp) - returns the profit and loss of a wallet
+  - getTokenDetails(walletAddress, chainId) - returns the details of a token    
 
 Example format:
 \`\`\`javascript
@@ -193,6 +198,7 @@ const executeCode = async (code) => {
     const context = {
       ...require('../functions/metal'),
       ...require('../functions/lunarcrush'),
+      ...require('../functions/1inch'),
       // Utility functions
       console: {
         log: (...args) => console.log(...args),
