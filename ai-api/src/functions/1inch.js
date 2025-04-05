@@ -217,6 +217,70 @@ async function generatePortfolioChart(data, outputPath = 'portfolio_chart.png') 
   }
 }
 
+// Upload chart image to Supabase storage
+async function uploadChartToSupabase(supabase, imagePath, bucketName = 'portfolio') {
+  try {
+    // Read the file from the file system
+    const fileBuffer = fs.readFileSync(imagePath);
+    const fileExt = path.extname(imagePath);
+    const fileName = `charts/${Date.now()}${fileExt}`;
+    
+    // Upload the file to Supabase Storage (assuming bucket exists)
+    const { error: uploadError, data } = await supabase.storage
+      .from(bucketName)
+      .upload(fileName, fileBuffer, {
+        contentType: 'image/png',
+        cacheControl: '3600',
+        upsert: true  // Use upsert instead of creating new file to overcome RLS issues
+      });
+    
+    if (uploadError) throw uploadError;
+    
+    // Construct the direct storage URL using the correct format
+    // Format: https://<project-ref>.supabase.co/storage/v1/object/public/<bucket>/<file-path>
+    const projectRef = supabase.supabaseUrl.match(/https:\/\/(.*?)\.supabase/)[1];
+    const storageUrl = `https://${projectRef}.supabase.co/storage/v1/object/public/${bucketName}/${fileName}`;
+    
+    return {
+      success: true,
+      publicUrl: storageUrl,
+      fileName
+    };
+  } catch (error) {
+    console.error('Error uploading to Supabase:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+// Get portfolio data, generate chart and upload to Supabase
+async function generateAndUploadPortfolioChart(supabase, addresses, chainId, timerange = "1day", outputPath = 'portfolio_chart.png') {
+  try {
+    // Get the portfolio data
+    const data = await getPortfolioValueChart(addresses, chainId, timerange);
+    
+    // Create a temporary path for the chart
+    const tempChartPath = path.join(require('os').tmpdir(), `temp_chart_${Date.now()}.png`);
+    
+    // Generate and save the chart to the temporary location
+    await generatePortfolioChart(data, tempChartPath);
+    
+    // Upload the chart to Supabase
+    const uploadResult = await uploadChartToSupabase(supabase, tempChartPath);
+    
+    // Delete the temporary file
+    fs.unlinkSync(tempChartPath);
+    
+    // Return only the public URL of the uploaded image
+    return uploadResult.publicUrl;
+  } catch (error) {
+    console.error('Error in generateAndUploadPortfolioChart:', error);
+    throw error;
+  }
+}
+
 // Get portfolio data and generate chart
 async function getAndGeneratePortfolioChart(addresses, chainId, timerange = "1day", outputPath = 'portfolio_chart.png') {
   try {
@@ -295,6 +359,144 @@ async function getNFTsByAddress(address, chainIds = [1, 137, 8453, 42161, 43114,
   }
 }
 
+// Test chart generation functionality
+async function testChartGeneration() {
+  try {
+    console.log("\nTesting Chart Generation...");
+    
+    // First get the portfolio data
+    const data = await getPortfolioValueChart(TEST_ADDRESS, CHAIN_ID, "1day");
+    
+    // Generate chart from existing data
+    const chartPath1 = await generatePortfolioChart(data, 'portfolio_chart1.png');
+    console.log(`Chart 1 generated at: ${chartPath1}`);
+    
+    // Get data and generate chart in one step
+    const result = await getAndGeneratePortfolioChart(
+      TEST_ADDRESS,
+      CHAIN_ID,
+      "1day",
+      'portfolio_chart2.png'
+    );
+    console.log(`Chart 2 generated at: ${result.chartPath}`);
+    console.log("Portfolio data:", JSON.stringify(result.data, null, 2));
+    
+    return true;
+  } catch (error) {
+    console.error("Error in chart generation test:", error);
+    return false;
+  }
+}
+
+// Override the uploadChartToSupabase function to use portfolio bucket
+async function customUploadChartToSupabase(supabase, imagePath) {
+  try {
+    const bucketName = 'portfolio';
+    
+    // Read the file from the file system
+    const fs = require('fs');
+    const path = require('path');
+    const fileBuffer = fs.readFileSync(imagePath);
+    const fileExt = path.extname(imagePath);
+    const fileName = `charts/${Date.now()}${fileExt}`;
+    
+    // First check if the path exists and create it if needed
+    try {
+      const { data: folders, error: folderError } = await supabase
+        .storage
+        .from(bucketName)
+        .list('charts');
+      
+      if (folderError && folderError.message !== 'The resource was not found') {
+        console.log("Folder check error:", folderError.message);
+      }
+    } catch (e) {
+      console.log("Folder check failed:", e.message);
+    }
+    
+    // Use direct API access with service role key for upload
+    console.log(`Uploading to ${bucketName}/${fileName}...`);
+    const { error: uploadError, data } = await supabase.storage
+      .from(bucketName)
+      .upload(fileName, fileBuffer, {
+        contentType: 'image/png',
+        cacheControl: '3600',
+        upsert: true
+      });
+    
+    if (uploadError) {
+      console.error("Upload error details:", uploadError);
+      throw uploadError;
+    }
+    
+    // Construct the direct storage URL using the correct format
+    const storageUrl = `https://wbsnlpviggcnwqfyfobh.supabase.co/storage/v1/object/public/${bucketName}/${fileName}`;
+    
+    return {
+      success: true,
+      publicUrl: storageUrl,
+      fileName,
+      data
+    };
+  } catch (error) {
+    console.error('Error uploading to Supabase:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
+async function testSupabaseUpload() {
+  try {
+    console.log("\nTesting Supabase Upload...");
+    
+    // Skip test if Supabase credentials are not configured
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+      console.log('Skipping Supabase upload test - credentials not configured');
+      return true;
+    }
+    
+    console.log(`Using Supabase URL: ${SUPABASE_URL}`);
+    console.log("Using service role key to bypass RLS policies");
+    
+    // Test 1: Upload an existing chart to Supabase using the portfolio bucket
+    console.log("Test 1: Upload existing chart to portfolio bucket");
+    const data = await getPortfolioValueChart(TEST_ADDRESS, CHAIN_ID, "1day");
+    const chartPath = await generatePortfolioChart(data, 'portfolio_chart_upload.png');
+    
+    const uploadResult = await customUploadChartToSupabase(
+      supabase,
+      chartPath
+    );
+    
+    console.log("Upload result:", JSON.stringify(uploadResult, null, 2));
+    
+    // Test 2: Generate and upload in one step - using custom uploader
+    console.log("\nTest 2: Generate and upload in one step");
+    // Get data and generate chart
+    const portfolioData = await getPortfolioValueChart(TEST_ADDRESS, CHAIN_ID, "1week");
+    const oneStepChartPath = await generatePortfolioChart(portfolioData, 'portfolio_chart_one_step.png');
+    
+    // Upload with custom uploader
+    const uploadStepTwoResult = await customUploadChartToSupabase(
+      supabase,
+      oneStepChartPath
+    );
+    
+    console.log("Combined result:", {
+      chartPath: oneStepChartPath,
+      uploadSuccess: uploadStepTwoResult.success,
+      publicUrl: uploadStepTwoResult.publicUrl
+    });
+    
+    return uploadResult.success || uploadStepTwoResult.success;
+  } catch (error) {
+    console.error("Error in Supabase upload test:", error);
+    return false;
+  }
+}
+
 module.exports = {
   getPortfolioValueChart,
   safeGetPortfolioValueChart,
@@ -303,5 +505,10 @@ module.exports = {
   getCurrentValue,
   getProfitAndLoss,
   getTokenDetails,
-  getNFTsByAddress
+  getNFTsByAddress,
+  uploadChartToSupabase,
+  generateAndUploadPortfolioChart,
+  testChartGeneration,
+  customUploadChartToSupabase,
+  testSupabaseUpload
 };
