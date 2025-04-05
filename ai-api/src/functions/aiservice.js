@@ -118,6 +118,10 @@ const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
   -Metal functions:
     -distributeTokens(address, amount, sendTo) - distributes tokens to an address
     -launchToken(name, ticker) - launches a token
+
+    -Curvegrid functions:
+    -getTransactionHistory(address) - returns transaction history only for the address of self
+
 IMPORTANT TOKEN ADDRESSES:
 - ETH on any network: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'
 - USDC on Base: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
@@ -264,6 +268,7 @@ const executeCode = async (code) => {
       ...require('../functions/metal'),
       ...require('../functions/lunarcrush'),
       ...require('../functions/1inch'),
+      ...require('../functions/curvegrid'),
       // Add swap functions
       ...require('../functions/swap'),
       // Utility functions

@@ -4,17 +4,6 @@ const axios = require("axios");
 const JWT_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiaWF0IjoxNzQzODM2NzE0LCJqdGkiOiJmZGViZTIwYS0xZGVmLTRiYWEtODYyZS00MWJmZWZmZjcxM2YifQ.cpG1R5Uyzoy6bL2-ijwV8HQOKk12JW9X4fuRr07qc7Q";
 const BASE_URL = "https://sfhqqxqwkfaslnwm5ktynkxgja.multibaas.com";
 
-/**
- * Get transaction history for a specific address
- * @param {string} address - The address to get transaction history for
- * @param {Object} options - Optional parameters
- * @param {string} options.hash - Transaction hash to filter by
- * @param {number} options.nonce - Transaction nonce to filter by
- * @param {string} options.status - Transaction status to filter by (e.g., 'pending')
- * @param {number} options.limit - Maximum number of transactions to return (default: 10)
- * @param {number} options.offset - Number of transactions to skip (default: 0)
- * @returns {Promise<Object>} Transaction history data
- */
 const getTransactionHistory = async (address, options = {}) => {
   try {
     const {
