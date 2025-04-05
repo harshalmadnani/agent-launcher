@@ -74,7 +74,13 @@ const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
     * useCache: (optional, default: true) Whether to use cached data
   - safeGetPortfolioValueChart(addresses, chainId, timerange, useCache) - safer version that handles errors gracefully
     * Same parameters as getPortfolioValueChart but returns fallback data on error
-  - getNFTsByAddress(address, chainIds) - returns a list of NFTs owned by an address  
+  - generateAndUploadPortfolioChart(addresses, chainId, timerange, outputPath) - generates a chart and uploads it to Supabase
+    * addresses: Array of wallet addresses or single address
+    * chainId: (optional, default: 1) The chain ID (1 for Ethereum)
+    * timerange: (optional, default: "1day") Time range format
+    * outputPath: (optional) Path to save the chart locally before uploading
+    * Returns the public URL of the uploaded chart image
+  - getNFTsByAddress(address, chainIds) - returns a list of NFTs owned by an address
   - getCurrentValue(walletAddress, chainId) - returns the current value of a wallet
   - getProfitAndLoss(walletAddress, chainId, fromTimestamp, toTimestamp) - returns the profit and loss of a wallet
   - getTokenDetails(walletAddress, chainId) - returns the details of a token    
