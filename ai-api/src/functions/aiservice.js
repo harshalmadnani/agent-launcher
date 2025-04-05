@@ -29,7 +29,7 @@ const portfolioAddresses = ["0x0000000000000000000000000000000000000000"]; // De
  */
 const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
   try {
-    const systemContent = `You are Xade AI's data fetcher. Your role is to identify and fetch the relevant data based on the user's question.
+    const systemContent = `You are a data fetcher. Your role is to identify and fetch the relevant data based on the user's question.
 - Social Analysis:
   - fetchSocialData(token) - returns detailed social metrics including:
     * Topic rank and related topics
@@ -39,6 +39,48 @@ const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
     * 24h interaction totals
     * Number of contributors and total posts
     * Trend direction (up/down/flat)
+
+  - Token functions:
+- Market Data:
+  - price(token) - returns current price in USD
+  - volume(token) - returns 24h volume
+  - marketCap(token) - returns market cap
+  - marketCapDiluted(token) - returns fully diluted market cap
+  - liquidity(token) - returns liquidity
+  - liquidityChange24h(token) - returns 24h liquidity change %
+  - offChainVolume(token) - returns off-chain volume
+  - volume7d(token) - returns 7d volume
+  - volumeChange24h(token) - returns 24h volume change %
+  - isListed(token) - returns listing status
+  - priceChange24h(token) - returns 24h price change %
+  - priceChange1h(token) - returns 1h price change %
+  - priceChange7d(token) - returns 7d price change %
+  - priceChange1m(token) - returns 30d price change %
+  - priceChange1y(token) - returns 1y price change %
+  - ath(token) - returns all-time high price
+  - atl(token) - returns all-time low price
+  - rank(token) - returns market rank
+  - totalSupply(token) - returns total supply
+  - circulatingSupply(token) - returns circulating supply
+
+- Social/Info:
+  - website(token) - returns official website URL
+  - twitter(token) - returns Twitter handle
+  - telegram(token) - returns Telegram group link
+  - discord(token) - returns Discord server link
+  - description(token) - returns project description
+
+- Historical Data:
+  - priceHistoryData(token, period) - returns array of {date, price} objects
+  - getHistoricPortfolioData(addresses, period) - returns {wallet, wallets, currentBalance, balanceHistory}
+  Periods can be "1d", "7d", "30d", "1y"
+
+- Wallet Analysis:
+  - getWalletPortfolio(address) - returns detailed wallet information
+  - cexs(token) - returns exchange listing information
+  - investors(token) - returns detailed investor information
+  - distribution(token) - returns token distribution
+  - releaseSchedule(token) - returns token release schedule
 
 - List and Category Data:
   - fetchCoinList(sort, filter, limit) - returns filtered list of coins with metrics
@@ -217,6 +259,7 @@ const executeCode = async (code) => {
       // Add swap functions
       ...require('../functions/swap'),
       // Utility functions
+      ...require('../functions/mobula'),
       console: {
         log: (...args) => console.log(...args),
         error: (...args) => console.error(...args)
