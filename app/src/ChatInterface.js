@@ -77,7 +77,7 @@ const testImageUrl = (url) => {
   });
 };
 
-const ChatInterface = () => {
+const ChatInterface = ({ username, userAddress }) => {
   const [inputValue, setInputValue] = useState('');
   const [isWelcomeScreen, setIsWelcomeScreen] = useState(true);
   const [messages, setMessages] = useState([]);
@@ -86,7 +86,8 @@ const ChatInterface = () => {
 
   // Add logging on component mount
   useEffect(() => {
-    console.log('ChatInterface component mounted');
+    console.log('ChatInterface: Component mounted');
+    console.log('ChatInterface: User data:', { username, userAddress });
     
     // Handle potential Chrome extension errors
     if (window.chrome && window.chrome.runtime) {
@@ -160,7 +161,7 @@ const ChatInterface = () => {
       window.removeEventListener('error', handleGlobalError);
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
     };
-  }, []);
+  }, [username, userAddress]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -175,22 +176,27 @@ const ChatInterface = () => {
   };
   
   const fetchBotResponse = async (userQuery) => {
-    console.log('Fetching bot response for query:', userQuery);
+    console.log(`ChatInterface: Fetching bot response for query:`, userQuery);
+    console.log(`ChatInterface: Using username:`, username);
     setIsLoading(true);
     try {
-      console.log('Making API request to analyze endpoint');
+      console.log('ChatInterface: Making API request to analyze endpoint');
+      const requestBody = {
+        query: userQuery,
+        username: username,
+        systemPrompt: "You are a helpful AI assistant that provides cryptocurrency analysis.Please keep your response under 200 characters"
+      };
+      console.log('ChatInterface: Request body:', requestBody);
+      
       const response = await fetch('https://agent-launcher.onrender.com/analyze', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          query: userQuery,
-          systemPrompt: "You are a helpful AI assistant that provides cryptocurrency analysis.Please keep your response under 200 characters"
-        })
+        body: JSON.stringify(requestBody)
       });
 
-      console.log('API response status:', response.status);
+      console.log('ChatInterface: API response status:', response.status);
       
       if (!response.ok) {
         throw new Error(`Network response error: ${response.status} ${response.statusText}`);
@@ -438,7 +444,7 @@ const ChatInterface = () => {
                       <div className="image-container">
                         <img 
                           src={message.imageUrl} 
-                          alt="Response image" 
+                          alt="Generated content" 
                           className="response-image"
                           loading="lazy"
                           onLoad={() => {

@@ -2,6 +2,7 @@ import './App.css';
 import ChatInterface from './ChatInterface';
 import Navbar from './Navbar';
 import { PrivyProvider } from '@privy-io/react-auth';
+import AuthGuard from './AuthGuard';
 
 function App() {
   // Replace with your actual Privy app ID from your Privy dashboard
@@ -22,7 +23,9 @@ function App() {
         <div className="app-container">
           <Navbar />
           <main className="main-content">
-            <ChatInterface />
+            <AuthGuard>
+              <ChatInterface />
+            </AuthGuard>
           </main>
         </div>
       </div>
