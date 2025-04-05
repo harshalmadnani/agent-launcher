@@ -7,6 +7,12 @@ const path = require('path');
 // Register all Chart.js components
 Chart.register(...registerables);
 
+// Configure Chart.js for Node environment
+Chart.defaults.font.family = 'Arial';
+Chart.defaults.color = '#666';
+// Set global animation to false for server-side rendering
+Chart.defaults.animation = false;
+
 const BASE_URL = "https://api.1inch.dev/portfolio/portfolio/v4";
 const API_KEY = "ab4VmoqAepOnY86Y47rB86AIvvYvCHP4";
 
@@ -46,21 +52,63 @@ async function makeApiRequest(endpoint, params = {}) {
 }
 
 // Get portfolio value chart data
-async function getPortfolioValueChart(addresses, chainId, timerange = "1day", useCache = "true") {
+async function getPortfolioValueChart(addresses, chainId = 1, timerange = "1month", useCache = true) {
+  // Map short formats to required API formats
+  const timerangeMap = {
+    '1d': '1day',
+    '7d': '1week',
+    '30d': '1month',
+    '1y': '1year',
+    '3y': '3years'
+  };
+  
+  // Convert timerange if using short format
+  const apiTimerange = timerangeMap[timerange] || timerange;
+  
   return makeApiRequest('/general/value_chart', {
     addresses: Array.isArray(addresses) ? addresses : [addresses],
-    chain_id: chainId,
-    timerange: timerange,
-    use_cache: useCache
+    chain_id: chainId.toString(),
+    timerange: apiTimerange,
+    use_cache: useCache.toString() // Convert boolean to string
   });
+}
+
+// Safer wrapper for portfolio chart that handles errors gracefully
+async function safeGetPortfolioValueChart(addresses, chainId = 1, timerange = "30d", useCache = true) {
+  try {
+    // Try to get the portfolio value chart
+    return await getPortfolioValueChart(addresses, chainId, timerange, useCache);
+  } catch (error) {
+    console.error("Portfolio chart API error:", error.message);
+    
+    // If the API fails, return a structured error object with helpful information
+    return {
+      error: true,
+      code: error.response?.status || 500,
+      message: "Unable to retrieve portfolio chart data",
+      errorDetails: error.response?.data || error.message,
+      // Return empty placeholder data for graceful fallback
+      result: [],
+      meta: {
+        status: "error",
+        error_message: error.message
+      }
+    };
+  }
 }
 
 // Generate chart from portfolio value data
 async function generatePortfolioChart(data, outputPath = 'portfolio_chart.png') {
   try {
     // Create canvas
-    const canvas = createCanvas(1200, 600);
+    const width = 1200;
+    const height = 600;
+    const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
+    
+    // Set background
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, width, height);
 
     // Check if data is in the expected format
     if (!data || !data.result || !Array.isArray(data.result)) {
@@ -78,8 +126,8 @@ async function generatePortfolioChart(data, outputPath = 'portfolio_chart.png') 
     });
     const values = data.result.map(item => parseFloat(item.value_usd));
 
-    // Create chart
-    new Chart(ctx, {
+    // Create chart with Node.js compatibility settings
+    const chart = new Chart(ctx, {
       type: 'line',
       data: {
         labels: timestamps,
@@ -95,8 +143,9 @@ async function generatePortfolioChart(data, outputPath = 'portfolio_chart.png') 
         }]
       },
       options: {
-        responsive: true,
+        responsive: false, // Important for Node environment
         maintainAspectRatio: false,
+        animation: false, // Disable animations for server-side rendering
         plugins: {
           title: {
             display: true,
@@ -107,13 +156,7 @@ async function generatePortfolioChart(data, outputPath = 'portfolio_chart.png') 
             }
           },
           tooltip: {
-            mode: 'index',
-            intersect: false,
-            callbacks: {
-              label: function(context) {
-                return `$${context.raw.toFixed(2)}`;
-              }
-            }
+            enabled: false, // Disable tooltips for server-side rendering
           },
           legend: {
             display: true,
@@ -152,12 +195,16 @@ async function generatePortfolioChart(data, outputPath = 'portfolio_chart.png') 
             },
             ticks: {
               maxRotation: 45,
-              minRotation: 45
+              minRotation: 45,
+              maxTicksLimit: 8 // Limit number of labels to prevent overcrowding
             }
           }
         }
       }
     });
+    
+    // Render the chart
+    chart.render();
 
     // Save the chart as PNG
     const buffer = canvas.toBuffer('image/png');
@@ -192,7 +239,7 @@ async function getAndGeneratePortfolioChart(addresses, chainId, timerange = "1da
 async function getCurrentValue(walletAddress, chainId) {
   return makeApiRequest('/overview/erc20/current_value', {
     addresses: Array.isArray(walletAddress) ? walletAddress : [walletAddress],
-    chain_id: chainId
+    chain_id: chainId.toString()
   });
 }
 
@@ -200,7 +247,7 @@ async function getCurrentValue(walletAddress, chainId) {
 async function getProfitAndLoss(walletAddress, chainId, fromTimestamp, toTimestamp) {
   return makeApiRequest('/overview/erc20/profit_and_loss', {
     addresses: Array.isArray(walletAddress) ? walletAddress : [walletAddress],
-    chain_id: chainId,
+    chain_id: chainId.toString(),
     from_timestamp: fromTimestamp,
     to_timestamp: toTimestamp
   });
@@ -210,7 +257,7 @@ async function getProfitAndLoss(walletAddress, chainId, fromTimestamp, toTimesta
 async function getTokenDetails(walletAddress, chainId) {
   return makeApiRequest('/overview/erc20/details', {
     addresses: Array.isArray(walletAddress) ? walletAddress : [walletAddress],
-    chain_id: chainId
+    chain_id: chainId.toString()
   });
 }
 
@@ -222,7 +269,7 @@ async function getNFTsByAddress(address, chainIds = [1, 137, 8453, 42161, 43114,
       "Authorization": `Bearer ${API_KEY}`
     },
     params: {
-      chainIds,
+      chainIds: Array.isArray(chainIds) ? chainIds.map(id => id.toString()) : [chainIds.toString()],
       address
     },
     paramsSerializer: {
@@ -250,6 +297,7 @@ async function getNFTsByAddress(address, chainIds = [1, 137, 8453, 42161, 43114,
 
 module.exports = {
   getPortfolioValueChart,
+  safeGetPortfolioValueChart,
   generatePortfolioChart,
   getAndGeneratePortfolioChart,
   getCurrentValue,

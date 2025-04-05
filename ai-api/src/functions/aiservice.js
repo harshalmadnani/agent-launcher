@@ -66,6 +66,14 @@ const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
 
 - Portfolio Data:
   - getPortfolioValueChart(addresses, chainId, timerange, useCache) - returns a chart of the portfolio value over time
+    * addresses: Array of wallet addresses or single address
+    * chainId: (optional, default: 1) The chain ID (1 for Ethereum)
+    * timerange: (optional, default: "1month") Time range format: 
+      - Valid API formats: "1day", "1week", "1month", "1year", "3years"
+      - Short formats: "1d", "7d", "30d", "1y", "3y" 
+    * useCache: (optional, default: true) Whether to use cached data
+  - safeGetPortfolioValueChart(addresses, chainId, timerange, useCache) - safer version that handles errors gracefully
+    * Same parameters as getPortfolioValueChart but returns fallback data on error
   - getNFTsByAddress(address, chainIds) - returns a list of NFTs owned by an address  
   - getCurrentValue(walletAddress, chainId) - returns the current value of a wallet
   - getProfitAndLoss(walletAddress, chainId, fromTimestamp, toTimestamp) - returns the profit and loss of a wallet
@@ -78,6 +86,20 @@ const data = {
   priceHistory: await priceHistoryData("bitcoin", "30d"),
   socialMetrics: await getSocialData("bitcoin"),
   news: await getTopicNews("bitcoin"),
+};
+return data;
+\`\`\`
+
+For portfolio data example:
+\`\`\`javascript
+const data = {
+  currentValue: await getCurrentValue("0x7E3bBf75aba09833f899bB1FDd917FC3A5617555", 1),
+  // Use the safer function that handles errors gracefully with proper timerange
+  portfolioChart: await safeGetPortfolioValueChart(
+    ["0x7E3bBf75aba09833f899bB1FDd917FC3A5617555"], 
+    1,           // chainId
+    "1month"     // correct timerange format
+  ),
 };
 return data;
 \`\`\`
@@ -223,7 +245,18 @@ const executeCode = async (code) => {
         return result;
       } catch (error) {
         console.error('Error in executed code:', error);
-        return { error: error.message };
+        
+        // Extract important details from API errors
+        if (error.name === 'AxiosError' && error.response) {
+          return { 
+            error: true, 
+            message: \`API Error: \${error.response.status} - \${error.response.statusText}\`, 
+            details: error.response.data,
+            timestamp: new Date().toISOString()
+          };
+        }
+        
+        return { error: true, message: error.message };
       }
     `);
     
@@ -232,7 +265,15 @@ const executeCode = async (code) => {
     
     // Handle error results
     if (result && result.error) {
-      throw new Error(result.error);
+      console.warn('Warning: Execution returned error object:', result.message);
+      // Continue with partial data if available
+      return {
+        error: true,
+        message: result.message,
+        partialData: result.partialData || {},
+        details: result.details || {},
+        timestamp: new Date().toISOString()
+      };
     }
     
     return result;
@@ -275,17 +316,33 @@ const analyzeQuery = async (userInput, systemPrompt, model = 'deepseek-r1-distil
       executedData = await executeCode(dataFetchingCode);
       console.log('Executed data:', executedData);
     } catch (execError) {
-      console.error('Warning: Data execution failed:', execError);
+      console.error('Error executing data fetching code:', execError);
       executedData = {
         error: true,
         message: execError.message,
-        partialData: {}
+        partialData: {},
+        timestamp: new Date().toISOString()
+      };
+    }
+
+    // Even if there are errors, still proceed with any partial data
+    let analysisData = executedData;
+    
+    // If we got an error but have partial data, use that
+    if (executedData.error && executedData.partialData) {
+      console.log('Using partial data for analysis despite errors');
+      analysisData = {
+        ...executedData.partialData,
+        errorInfo: {
+          message: executedData.message,
+          timestamp: executedData.timestamp
+        }
       };
     }
 
     // Step 3: Analyze the data using the specified model
     console.log('Step 3: Generating analysis and insights...');
-    const analysis = await characterAPI(userInput, executedData, systemPrompt, model);
+    const analysis = await characterAPI(userInput, analysisData, systemPrompt, model);
     console.log('Generated analysis:', analysis);
     if (!analysis) {
       throw new Error('Failed to generate analysis');

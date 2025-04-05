@@ -89,6 +89,8 @@ async function launchToken(name, ticker, merchantAddress) {
 
     // Check status and retry if pending
     let statusResponse;
+    let tokenAddress;
+    
     do {
       statusResponse = await getTokenCreationStatus(tokenResponse.jobId);
       
@@ -96,16 +98,43 @@ async function launchToken(name, ticker, merchantAddress) {
         // Wait another 20 seconds before checking again
         await new Promise(resolve => setTimeout(resolve, 20000));
       } else if (statusResponse.status === 'success') {
-        // Create liquidity for the token
-        const liquidityResponse = await createLiquidity(statusResponse.tokenAddress);
-        return {
-          tokenCreation: statusResponse,
-          liquidityCreation: liquidityResponse
-        };
+        tokenAddress = statusResponse.data?.address || statusResponse.tokenAddress;
+        break;
       } else {
         throw new Error(`Token creation failed with status: ${statusResponse.status}`);
       }
     } while (statusResponse.status === 'pending');
+
+    if (!tokenAddress) {
+      throw new Error('Token address not found in the response');
+    }
+
+    // Wait 30 seconds before creating liquidity
+    console.log('Token created successfully. Waiting 30 seconds before creating liquidity...');
+    await new Promise(resolve => setTimeout(resolve, 30000));
+    
+    // Retry logic for creating liquidity
+    let liquidityResponse;
+    let retries = 0;
+    const maxRetries = 3;
+    
+    while (retries < maxRetries) {
+      liquidityResponse = await createLiquidity(tokenAddress);
+      
+      // Check if the response indicates a successful operation
+      if (!liquidityResponse.message || !liquidityResponse.httpCode) {
+        break; // Success response
+      }
+      
+      console.log(`Attempt ${retries + 1} failed: ${liquidityResponse.message}. Retrying in 10 seconds...`);
+      await new Promise(resolve => setTimeout(resolve, 10000));
+      retries++;
+    }
+    
+    return {
+      tokenCreation: statusResponse,
+      liquidityCreation: liquidityResponse
+    };
 
   } catch (error) {
     console.error('Error in launchToken:', error);
