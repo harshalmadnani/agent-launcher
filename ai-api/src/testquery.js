@@ -3,7 +3,7 @@ const axios = require('axios');
 async function testAnalyzeQuery() {
   try {
     const response = await axios.post('http://localhost:3000/analyze', {
-      query: "SOL metadata (use fetchmetadata function)",
+      query: "get the tokens held by 0x7E3bBf75aba09833f899bB1FDd917FC3A5617555 on base and perform swap transactions until the portfolio is 100% in USDC on base",
       systemPrompt: "You are a helpful AI assistant that provides cryptocurrency analysis.Please keep your response under 200 characters",
       model: "deepseek-r1-distill-llama-70b"
     });

@@ -44,7 +44,6 @@ const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
     - swap(src, dst, amount, from, origin, slippage, chainId) - returns a swap transaction
     - getSwapQuote(src, dst, amount, chainId) - returns a swap quote in wei
 
-  - Token functions:
 - Market Data:
   - price(token) - returns current price in USD
   - volume(token) - returns 24h volume
@@ -134,19 +133,57 @@ IMPORTANT TOKEN ADDRESSES:
 
 Example format:
 \`\`\`javascript
-const data = {
-  currentPrice: await price("bitcoin"),
-  priceHistory: await priceHistoryData("bitcoin", "30d"),
-  socialMetrics: await getSocialData("bitcoin"),
-  news: await getTopicNews("bitcoin"),
+// First get the token details
+const tokenDetails = await getTokenDetails("0x7E3bBf75aba09833f899bB1FDd917FC3A5617555", 8453);
+
+// Then get prices for each token
+const tokenPrices = await Promise.all(
+  tokenDetails.tokens.map(async (token) => ({
+    ...token,
+    price: await price(token.address)
+  }))
+);
+
+// Finally, generate swap transactions
+const swapTransactions = await Promise.all(
+  tokenPrices
+    .filter(token => token.price && token.price > 0)
+    .map(async (token) => {
+      const quote = await getSwapQuote(
+        token.address,
+        "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC on Base
+        token.amount * token.price,
+        8453
+      );
+      
+      if (quote) {
+        return await swap(
+          token.address,
+          "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+          token.amount,
+          "0x7E3bBf75aba09833f899bB1FDd917FC3A5617555",
+          "portfolio rebalance",
+          0.01,
+          8453
+        );
+      }
+      return null;
+    })
+);
+
+return {
+  tokenDetails,
+  tokenPrices,
+  swapTransactions
 };
-return data;
 \`\`\`
 
 Instructions:
 1. Return only the raw data needed to answer the user's question
 2. Format your response as JavaScript code that calls the necessary functions
 3. Always return the fetched data as a structured object
+4. Make sure to initialize variables before using them
+5. Use proper error handling for API calls
 `;
 
     if (model === 'deepseek-r1-distill-llama-70b') {
@@ -255,6 +292,7 @@ const executeCode = async (code) => {
   try {
     // Clean and validate the code input
     if (!code || typeof code !== 'string') {
+      console.error('Invalid code input:', { codeType: typeof code, codeLength: code?.length });
       throw new Error('Invalid code input');
     }
 
@@ -264,8 +302,15 @@ const executeCode = async (code) => {
       .trim();
 
     if (!cleanCode) {
+      console.error('Empty code after cleaning');
       throw new Error('Empty code after cleaning');
     }
+
+    console.log('Starting code execution with cleaned code:', {
+      codeLength: cleanCode.length,
+      firstLine: cleanCode.split('\n')[0],
+      lastLine: cleanCode.split('\n').pop()
+    });
 
     // Create a safe context with allowed functions
     const context = {
@@ -274,9 +319,7 @@ const executeCode = async (code) => {
       ...require('../functions/1inch'),
       ...require('../functions/curvegrid'),
       ...require('../functions/transfer'),
-      // Add swap functions
       ...require('../functions/swap'),
-      // Utility functions
       ...require('../functions/mobula'),
       ...require('../functions/token'),
       console: {
@@ -285,16 +328,30 @@ const executeCode = async (code) => {
       }
     };
 
-    // Capture logs for debugging
+    // Enhanced logging system
     const logs = [];
     const captureLog = {
       log: (...args) => {
-        console.log(...args);
-        logs.push({ type: 'log', content: args.map(arg => String(arg)).join(' ') });
+        const timestamp = new Date().toISOString();
+        const logEntry = {
+          type: 'log',
+          timestamp,
+          content: args.map(arg => String(arg)).join(' '),
+          stack: new Error().stack.split('\n').slice(2) // Get call stack without this function
+        };
+        console.log(`[${timestamp}]`, ...args);
+        logs.push(logEntry);
       },
       error: (...args) => {
-        console.error(...args);
-        logs.push({ type: 'error', content: args.map(arg => String(arg)).join(' ') });
+        const timestamp = new Date().toISOString();
+        const logEntry = {
+          type: 'error',
+          timestamp,
+          content: args.map(arg => String(arg)).join(' '),
+          stack: new Error().stack.split('\n').slice(2)
+        };
+        console.error(`[${timestamp}]`, ...args);
+        logs.push(logEntry);
       }
     };
 
@@ -303,23 +360,40 @@ const executeCode = async (code) => {
       console: captureLog
     };
 
+    console.log('Context initialized with functions:', {
+      functionCount: Object.keys(context).length,
+      availableFunctions: Object.keys(context).filter(key => typeof context[key] === 'function')
+    });
+
     // Create and execute async function with better error handling
     const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
     const fn = new AsyncFunction(...Object.keys(contextWithLogCapture), `
       try {
+        console.log('Starting async execution');
         // Ensure the code returns a value
         const result = await (async () => {
           ${cleanCode}
         })();
         
+        console.log('Async execution completed', { 
+          resultType: typeof result,
+          hasError: result?.error,
+          timestamp: new Date().toISOString()
+        });
+        
         // Handle undefined or null results
         if (result === undefined || result === null) {
+          console.error('No data returned from execution');
           return { error: 'No data returned' };
         }
         
         return result;
       } catch (error) {
-        console.error('Error in executed code:', error);
+        console.error('Error in executed code:', {
+          error: error.message,
+          stack: error.stack,
+          name: error.name
+        });
         
         // Extract important details from API errors
         if (error.name === 'AxiosError' && error.response) {
@@ -336,17 +410,28 @@ const executeCode = async (code) => {
     `);
     
     // Execute the function with the context
+    console.log('Executing function with context');
     const result = await fn(...Object.values(contextWithLogCapture));
     
     // Add logs to the result
     const resultWithLogs = {
       ...(typeof result === 'object' ? result : { data: result }),
-      _executionLogs: logs
+      _executionLogs: logs,
+      _executionMetadata: {
+        timestamp: new Date().toISOString(),
+        executionTime: Date.now() - startTime,
+        logCount: logs.length,
+        errorCount: logs.filter(log => log.type === 'error').length
+      }
     };
     
     // Handle error results
     if (result && result.error) {
-      console.warn('Warning: Execution returned error object:', result.message);
+      console.warn('Warning: Execution returned error object:', {
+        message: result.message,
+        details: result.details,
+        timestamp: result.timestamp
+      });
       // Continue with partial data if available
       return {
         error: true,
@@ -354,19 +439,35 @@ const executeCode = async (code) => {
         partialData: result.partialData || {},
         details: result.details || {},
         timestamp: new Date().toISOString(),
-        _executionLogs: logs
+        _executionLogs: logs,
+        _executionMetadata: resultWithLogs._executionMetadata
       };
     }
     
+    console.log('Execution completed successfully', {
+      resultType: typeof result,
+      hasLogs: logs.length > 0,
+      executionTime: resultWithLogs._executionMetadata.executionTime
+    });
+    
     return resultWithLogs;
   } catch (error) {
-    console.error('Error executing code:', error);
+    console.error('Error executing code:', {
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    });
     // Return a structured error response instead of throwing
     return {
       error: true,
       message: error.message,
       timestamp: new Date().toISOString(),
-      _executionLogs: [{ type: 'error', content: `Execution error: ${error.message}` }]
+      _executionLogs: [{ 
+        type: 'error', 
+        content: `Execution error: ${error.message}`,
+        stack: error.stack,
+        timestamp: new Date().toISOString()
+      }]
     };
   }
 };

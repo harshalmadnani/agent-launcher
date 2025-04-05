@@ -56,11 +56,12 @@ async function distributeTokens(address, sendTo, amount) {
 async function distributeToUsernames(address, toUsername, amount) {
   try {
     // Get to address
-    const toResponse = await axios.get(`https://agent-launcher.onrender.com/user?username=${toUsername}`);
-    if (!toResponse.data.success || !toResponse.data.address) {
+    const toResponse = await fetch(`https://agent-launcher.onrender.com/user?username=${toUsername}`);
+    const toData = await toResponse.json();
+    if (!toData.success || !toData.address) {
       throw new Error(`Could not resolve address for recipient username: ${toUsername}`);
     }
-    const toAddress = toResponse.data.address;
+    const toAddress = toData.address;
 
     // Call the existing distributeTokens function
     return await distributeTokens(address, toAddress, amount);

@@ -328,10 +328,49 @@ async function getProfitAndLoss(walletAddress, chainId, fromTimestamp, toTimesta
 
 // Get detailed information for supported tokens
 async function getTokenDetails(walletAddress, chainId) {
-  return makeApiRequest('/overview/erc20/details', {
-    addresses: Array.isArray(walletAddress) ? walletAddress : [walletAddress],
-    chain_id: chainId.toString()
-  });
+  const url = "https://api.1inch.dev/portfolio/portfolio/v4/overview/erc20/details";
+
+  const config = {
+    headers: {
+      "Authorization": "Bearer ab4VmoqAepOnY86Y47rB86AIvvYvCHP4"
+    },
+    params: {
+      "addresses": Array.isArray(walletAddress) ? walletAddress : [walletAddress],
+      "chain_id": chainId.toString(),
+      "closed": true,
+      "closed_threshold": 1
+    },
+    paramsSerializer: {
+      indexes: null
+    }
+  };
+
+  try {
+    const response = await axios.get(url, config);
+    
+    // Check if response has the expected structure
+    if (!response.data || !response.data.result) {
+      return {
+        result: [],
+        error: 'Invalid response format from API',
+        meta: response.data?.meta || {}
+      };
+    }
+
+    return response.data;
+  } catch (error) {
+    console.error('Error in getTokenDetails:', error);
+    return {
+      result: [],
+      error: error.response?.data?.message || error.message,
+      meta: {
+        system: {
+          error: true,
+          error_message: error.message
+        }
+      }
+    };
+  }
 }
 
 // Get NFTs by address
