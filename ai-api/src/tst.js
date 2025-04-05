@@ -1,4 +1,4 @@
-const { generateSwapTransaction, getSwapQuote, getApproveTransaction, swap, signbase, approve } = require('./swap');
+const { generateSwapTransaction, getSwapQuote, getApproveTransaction, swap, signbase, approve } = require('./functions/swap');
 require('dotenv').config();
 
 // Constants
@@ -219,6 +219,14 @@ async function testSignedApproveTransaction() {
   }
 }
 
+
+function main() {
+    console.log("123123");
+    // testCombinedSwap();
+    testSignedApproveTransaction();
+}
+
+main();
 
 // Export the functions for use in other scripts
 module.exports = {
