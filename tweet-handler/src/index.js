@@ -506,7 +506,7 @@ async function getTargetUserTweets(agentId) {
 }
 
 // Function to get AI analysis for a tweet
-async function getAIAnalysis(tweetText, username) {
+async function getAIAnalysis(tweetText, username, agentId) {
   try {
     // Try to get wallet address if username is provided
     let walletAddress = null;
@@ -514,8 +514,15 @@ async function getAIAnalysis(tweetText, username) {
       walletAddress = await getUserWalletAddress(username);
     }
     
-    // Construct the system prompt with wallet address if available
+    // Get agent description
+    const agentDescription = await getAgentDescription(agentId);
+    
+    // Construct the system prompt with wallet address and agent description if available
     let systemPrompt = "You are a helpful AI assistant. Analyze the tweet and provide a natural, engaging response. Keep responses concise and friendly. Don't use hashtags or emojis unless they were in the original tweet, dont mention any data errors and keep it under 200 characters.You are a twitter reply guy";
+    
+    if (agentDescription) {
+      systemPrompt += `. Your description is: ${agentDescription}`;
+    }
     
     if (walletAddress) {
       systemPrompt += ` The address of the user you're responding to is ${walletAddress}.`;
@@ -577,7 +584,7 @@ async function getAIAnalysis(tweetText, username) {
 // Update the generateMentionReply function to use AI analysis
 async function generateMentionReply(tweet) {
   try {
-    const analysis = await getAIAnalysis(tweet.text || '', tweet.username);
+    const analysis = await getAIAnalysis(tweet.text || '', tweet.username, tweet.agent_id);
     
     if (analysis) {
       let replyText = analysis;
@@ -1181,6 +1188,28 @@ async function setupScraper(twitterCredentials) {
     console.error('Login error:', loginError);
     throw new Error(`Twitter login failed: ${loginError.message}`);
   }
+}
+
+// Function to fetch agent description
+async function getAgentDescription(agentId) {
+  const { data, error } = await supabase
+    .from('agents2')
+    .select('description')
+    .eq('id', agentId)
+    .single();
+
+  if (error) {
+    console.error('Error fetching agent description:', error);
+    return null;
+  }
+  
+  if (!data?.description) {
+    console.log('No description found for agent:', agentId);
+    return null;
+  }
+  
+  console.log('Retrieved description for agent', agentId);
+  return data.description;
 }
 
 // Start the server and setup subscription

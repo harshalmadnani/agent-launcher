@@ -114,10 +114,14 @@ const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
   - fetchMetadata(coinname) - returns metadata
   - fetchHistoricPortfolioData(from, to, addresses) - returns historic portfolio data
   - fetchWalletPortfolio(address) - returns wallet portfolio
+-Transfer functions:
+  - transferWithUsernames(fromUsername, toUsername, amount) - transfers ETH between two users
+  - transfer(toAddress, amount, fromAddress) - transfers ETH between two addresses
 
   -Metal functions:
     -distributeTokens(address, amount, sendTo) - distributes tokens to an address
     -launchToken(name, ticker) - launches a token
+    -distributeToUsernames(address, toUsername, amount) - distributes tokens to a username
 
     -Curvegrid functions:
     -getTransactionHistory(address) - returns transaction history only for the address of self
@@ -269,6 +273,7 @@ const executeCode = async (code) => {
       ...require('../functions/lunarcrush'),
       ...require('../functions/1inch'),
       ...require('../functions/curvegrid'),
+      ...require('../functions/transfer'),
       // Add swap functions
       ...require('../functions/swap'),
       // Utility functions

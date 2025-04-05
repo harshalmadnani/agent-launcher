@@ -1,61 +1,74 @@
-require('dotenv').config();
-const { transferEthToAddress, transferWithUsernames } = require('./transfer');
+const { transfer, transferWithUsernames } = require('./transfer');
 
-// Configuration
-const config = {
-    apiKey: process.env.API_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiaWF0IjoxNzQzODM2NzE0LCJqdGkiOiJmZGViZTIwYS0xZGVmLTRiYWEtODYyZS00MWJmZWZmZjcxM2YifQ.cpG1R5Uyzoy6bL2-ijwV8HQOKk12JW9X4fuRr07qc7Q",
-    baseUrl: process.env.BASE_URL || "https://sfhqqxqwkfaslnwm5ktynkxgja.multibaas.com",
-    senderAddress: '0xa5F8A22D2ee33281ca772f0eB18C04A32314bf6B',
-    recipientAddress: '0xa5F8A22D2ee33281ca772f0eB18C04A32314bf6B',
-    amount: '0.001', // Small amount for testing
-    // Test usernames - replace with actual usernames that exist in your system
-    fromUsername: 'harshalmadnani',
-    toUsername: 'mentigent'
-};
-
-async function runTests() {
+async function testTransfer() {
     try {
-        // Test 1: Simple ETH transfer with addresses
-        console.log('\nTest 1: Testing simple ETH transfer with addresses...');
-        const simpleTransferResult = await transferEthToAddress(
-            config.recipientAddress,
-            config.amount,
-            config.senderAddress,
-            config.apiKey,
-            config.baseUrl
+        // Test Case 1: Valid transfer
+        console.log("Testing valid transfer...");
+        const result = await transfer(
+            "0xa5F8A22D2ee33281ca772f0eB18C04A32314bf6B", // to address
+            "1000",  // amount in wei
+            "0xa5F8A22D2ee33281ca772f0eB18C04A32314bf6B"  // from address
         );
-        console.log('Simple transfer result:', JSON.stringify(simpleTransferResult, null, 2));
+        console.log("Transfer successful:", result);
 
-        // Test 2: Username-based transfer
-        console.log('\nTest 2: Testing transfer with usernames...');
-        console.log(`Starting transfer from ${config.fromUsername} to ${config.toUsername} for ${config.amount} ETH`);
-        const usernameTransferResult = await transferWithUsernames(
-            config.fromUsername,
-            config.toUsername,
-            config.amount
-        );
-        console.log('Username transfer result:', JSON.stringify(usernameTransferResult, null, 2));
+        // Test Case 2: Invalid address format
+        console.log("\nTesting invalid address format...");
+        try {
+            await transfer(
+                "invalid-address",
+                "1000",
+                "0xa5F8A22D2ee33281ca772f0eB18C04A32314bf6B"
+            );
+        } catch (error) {
+            console.log("Expected error caught:", error.message);
+        }
+
+        // Test Case 3: Zero amount transfer
+        console.log("\nTesting zero amount transfer...");
+        try {
+            const result = await transfer(
+                "0xa5F8A22D2ee33281ca772f0eB18C04A32314bf6B",
+                "0",
+                "0xa5F8A22D2ee33281ca772f0eB18C04A32314bf6B"
+            );
+            console.log("Transfer successful:", result);
+        } catch (error) {
+            console.log("Error:", error.message);
+        }
+
+        // Test Case 4: Valid transfer with usernames
+        console.log("\nTesting transfer with usernames...");
+        try {
+            const result = await transferWithUsernames(
+                "sender_username",  // from username
+                "receiver_username", // to username
+                "1000"  // amount
+            );
+            console.log("Transfer with usernames successful:", result);
+        } catch (error) {
+            console.log("Error in transfer with usernames:", error.message);
+        }
+
+        // Test Case 5: Invalid username transfer
+        console.log("\nTesting transfer with invalid usernames...");
+        try {
+            await transferWithUsernames(
+                "nonexistent_sender",
+                "nonexistent_receiver",
+                "1000"
+            );
+        } catch (error) {
+            console.log("Expected error caught:", error.message);
+        }
 
     } catch (error) {
-        console.error('Test failed:', error.message);
-        throw error;
+        console.error("Test failed:", error.message);
     }
 }
 
 // Run the tests
-if (require.main === module) {
-    console.log('Starting transfer tests...');
-    console.log('Please make sure to update the config with your actual values before running!');
-    
-    runTests()
-        .then(() => {
-            console.log('\nAll tests completed successfully');
-            process.exit(0);
-        })
-        .catch((error) => {
-            console.error('\nTests failed:', error);
-            process.exit(1);
-        });
-}
-
-module.exports = runTests; 
+testTransfer().then(() => {
+    console.log("\nAll tests completed");
+}).catch((error) => {
+    console.error("Test suite failed:", error.message);
+});

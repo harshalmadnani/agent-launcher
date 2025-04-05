@@ -1,6 +1,6 @@
 const axios = require('axios');
 
-async function transferEthToAddress(toAddress, amount, fromAddress, apiKey, baseUrl) {
+async function transfer(toAddress, amount, fromAddress) {
     try {
         // Validate addresses
         if (!toAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
@@ -12,15 +12,21 @@ async function transferEthToAddress(toAddress, amount, fromAddress, apiKey, base
 
         const response = await axios({
             method: 'post',
-            url: `${baseUrl}/api/v0/chains/ethereum/txm/transfer`,
+            url: `https://sfhqqxqwkfaslnwm5ktynkxgja.multibaas.com/api/v0/chains/ethereum/transfers`,
             headers: {
-                'Authorization': `Bearer ${apiKey}`,
+                'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiaWF0IjoxNzQzODM2NzE0LCJqdGkiOiJmZGViZTIwYS0xZGVmLTRiYWEtODYyZS00MWJmZWZmZjcxM2YifQ.cpG1R5Uyzoy6bL2-ijwV8HQOKk12JW9X4fuRr07qc7Q`,
                 'Content-Type': 'application/json'
             },
             data: {
                 from: fromAddress,
                 to: toAddress,
-                value: amount
+                value: amount,
+                signAndSubmit: true,
+                nonceManagement: false,
+                preEIP1559: false,
+                signer: fromAddress,
+                formatInts: "auto",
+                contractOverride: true
             }
         });
 
@@ -30,45 +36,7 @@ async function transferEthToAddress(toAddress, amount, fromAddress, apiKey, base
     }
 }
 
-async function transfer({
-    fromAddress,
-    toAddress,
-    amount,
-    apiKey,
-    baseUrl,
-    options = {}
-}) {
-    try {
-        // Validate addresses
-        if (!toAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
-            throw new Error('Invalid recipient address format');
-        }
-        if (!fromAddress.match(/^0x[a-fA-F0-9]{40}$/)) {
-            throw new Error('Invalid sender address format');
-        }
 
-        const payload = {
-            from: fromAddress,
-            to: toAddress,
-            value: amount,
-            ...options
-        };
-
-        const response = await axios({
-            method: 'post',
-            url: `${baseUrl}/eth/transfer`,
-            headers: {
-                'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'application/json'
-            },
-            data: payload
-        });
-
-        return response.data;
-    } catch (error) {
-        throw new Error(`CurveGrid ETH transfer failed: ${error.message}`);
-    }
-}
 
 async function transferWithUsernames(fromUsername, toUsername, amount) {
     try {
@@ -86,13 +54,11 @@ async function transferWithUsernames(fromUsername, toUsername, amount) {
         }
         const toAddress = toResponse.data.address;
 
-        // Call the existing transfer function
+        // Call the existing transfer function with hardcoded values
         return await transfer({
             fromAddress,
             toAddress,
             amount,
-            apiKey: process.env.API_KEY,
-            baseUrl: process.env.BASE_URL
         });
     } catch (error) {
         throw new Error(`Transfer failed: ${error.message}`);
@@ -100,7 +66,6 @@ async function transferWithUsernames(fromUsername, toUsername, amount) {
 }
 
 module.exports = {
-    transferEthToAddress,
     transfer,
     transferWithUsernames
 };
