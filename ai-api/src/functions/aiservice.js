@@ -128,7 +128,7 @@ return data;
 For swap example:
 \`\`\`javascript
 const data = {
- await swap(
+  swapResult: await swap(
     "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC on Base
     "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE", // ETH on any chain
     1000000, // 1 USDC (assuming 6 decimals)

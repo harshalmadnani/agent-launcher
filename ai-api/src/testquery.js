@@ -3,7 +3,7 @@ const axios = require('axios');
 async function testAnalyzeQuery() {
   try {
     const response = await axios.post('http://localhost:3000/analyze', {
-      query: "swap 1 USDC for ETH on the Base network for wallet 0xa5F8A22D2ee33281ca772f0eB18C04A32314bf6B",
+      query: "swap 0.00003 ETH for USDC on the Base network for wallet 0xa5F8A22D2ee33281ca772f0eB18C04A32314bf6B",
       systemPrompt: "You are a helpful AI assistant that provides cryptocurrency analysis.Please keep your response under 200 characters",
       model: "deepseek-r1-distill-llama-70b"
     });
