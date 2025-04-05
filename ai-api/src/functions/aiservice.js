@@ -40,6 +40,10 @@ const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
     * Number of contributors and total posts
     * Trend direction (up/down/flat)
 
+  - Swap functions:
+    - swap(src, dst, amount, from, origin, slippage, chainId) - returns a swap transaction
+    - getSwapQuote(src, dst, amount, chainId) - returns a swap quote in wei
+
   - Token functions:
 - Market Data:
   - price(token) - returns current price in USD
