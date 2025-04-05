@@ -75,7 +75,7 @@ const createUserWithUsername = async (username, userData = {}) => {
       };
     }
     
-    // First create the user record
+    // Create the user record with original username
     const userRecord = {
       username,
       created_at: new Date().toISOString(),
@@ -93,31 +93,14 @@ const createUserWithUsername = async (username, userData = {}) => {
     
     // After user is created, use the user's ID as the key name for HSM key
     const userId = data[0].id;
-    const formattedUsername = `user${userId}`; // Using the same format for username
-    const keyName = formattedUsername; // Using alphanumeric name format
-    
-    // Update the username to match the HSM key format
-    const { data: usernameUpdateData, error: usernameUpdateError } = await supabase
-      .from('users2')
-      .update({ username: formattedUsername })
-      .eq('id', userId)
-      .select();
-    
-    if (usernameUpdateError) {
-      console.error(`Error updating username: ${usernameUpdateError.message}`);
-      // Continue despite error in updating username
-    } else {
-      console.log(`Successfully updated username to ${formattedUsername}`);
-      // Use the updated user data
-      data[0] = usernameUpdateData[0];
-    }
+    const keyName = `user${userId}`; // Using user ID for HSM key name
     
     // Create an HSM key for the user using ID as key name
-    console.log(`Creating HSM key with name: ${keyName} for user: ${formattedUsername}`);
+    console.log(`Creating HSM key with name: ${keyName} for user: ${username}`);
     const hsmKeyResult = await createHsmKey(keyName);
     
     if (!hsmKeyResult.success) {
-      console.error(`Failed to create HSM key for user ${formattedUsername}:`, hsmKeyResult.error);
+      console.error(`Failed to create HSM key for user ${username}:`, hsmKeyResult.error);
       // We already created the user, so return successful user creation despite HSM failure
       return {
         success: true,
@@ -126,26 +109,7 @@ const createUserWithUsername = async (username, userData = {}) => {
       };
     }
     
-    console.log(`Successfully created HSM key for user ${formattedUsername}`);
-    
-    // Add the created HSM key using addHsmKey
-    if (hsmKeyResult.data && 
-        hsmKeyResult.data.result && 
-        hsmKeyResult.data.result.keyName && 
-        hsmKeyResult.data.result.keyVersion) {
-      
-      const { keyName, keyVersion } = hsmKeyResult.data.result;
-      console.log(`Adding HSM key to system with keyName: ${keyName}, keyVersion: ${keyVersion}`);
-      
-      const addKeyResult = await addHsmKey(keyName, keyVersion);
-      if (!addKeyResult.success) {
-        console.error(`Failed to add HSM key: ${addKeyResult.error}`);
-      } else {
-        console.log(`Successfully added HSM key to system`);
-        // Add the addKeyResult to hsmKeyResult for complete tracking
-        hsmKeyResult.addKeyResult = addKeyResult;
-      }
-    }
+    console.log(`Successfully created HSM key for user ${username}`);
     
     // Update the user record with address and HSM key data if available
     let updatedData = data[0];
@@ -340,73 +304,50 @@ const createUser = async (username, userData = {}) => {
     console.log('User created successfully, waiting 10 seconds...');
     await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
     
-    // Step 2: Create HSM key using the formatted username
+    // Step 2: Create HSM key using the userId
     const userId = userResult.data.id;
-    const formattedUsername = userResult.data.username;
-    const keyName = formattedUsername;
+    const keyName = `user${userId}`;
     
-    console.log(`Step 2: Creating HSM key for user: ${formattedUsername}`);
+    console.log(`Step 2: Creating HSM key for user: ${username} with keyName: ${keyName}`);
     const hsmKeyResult = await createHsmKey(keyName);
     
     if (!hsmKeyResult.success) {
       throw new Error(`Failed to create HSM key: ${hsmKeyResult.error}`);
     }
     
-    console.log('HSM key created successfully, waiting 10 seconds...');
-    await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
+    console.log('HSM key created successfully');
     
-    // Step 3: Add HSM key to the system
-    if (hsmKeyResult.data && 
-        hsmKeyResult.data.result && 
-        hsmKeyResult.data.result.keyName && 
-        hsmKeyResult.data.result.keyVersion) {
-      
-      const { keyName, keyVersion } = hsmKeyResult.data.result;
-      console.log(`Step 3: Adding HSM key to system with keyName: ${keyName}, keyVersion: ${keyVersion}`);
-      
-      const addKeyResult = await addHsmKey(keyName, keyVersion);
-      if (!addKeyResult.success) {
-        throw new Error(`Failed to add HSM key: ${addKeyResult.error}`);
-      }
-      
-      console.log('HSM key added successfully');
-      
-      // Update the user record with address and HSM key data
-      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-      
-      const updateFields = { 
-        hsm_key_data: hsmKeyResult.data,
-        key_added: true
-      };
-      
-      // If publicAddress is available in HSM response, use it
-      if (hsmKeyResult.data.result && hsmKeyResult.data.result.publicAddress) {
-        const publicAddress = hsmKeyResult.data.result.publicAddress;
-        console.log(`Updating user with address: ${publicAddress}`);
-        updateFields.address = publicAddress;
-      }
-      
-      const { data: updateData, error: updateError } = await supabase
-        .from('users2')
-        .update(updateFields)
-        .eq('id', userId)
-        .select();
-      
-      if (updateError) {
-        console.error(`Error updating user with HSM data: ${updateError.message}`);
-      } else {
-        console.log(`Successfully updated user with HSM data and key_added status`);
-      }
-      
-      return {
-        success: true,
-        data: updateData?.[0] || userResult.data,
-        hsmKeyResult,
-        addKeyResult
-      };
-    } else {
-      throw new Error('Invalid HSM key data received');
+    // Update the user record with address and HSM key data
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    
+    const updateFields = { 
+      hsm_key_data: hsmKeyResult.data
+    };
+    
+    // If publicAddress is available in HSM response, use it
+    if (hsmKeyResult.data.result && hsmKeyResult.data.result.publicAddress) {
+      const publicAddress = hsmKeyResult.data.result.publicAddress;
+      console.log(`Updating user with address: ${publicAddress}`);
+      updateFields.address = publicAddress;
     }
+    
+    const { data: updateData, error: updateError } = await supabase
+      .from('users2')
+      .update(updateFields)
+      .eq('id', userId)
+      .select();
+    
+    if (updateError) {
+      console.error(`Error updating user with HSM data: ${updateError.message}`);
+    } else {
+      console.log(`Successfully updated user with HSM data`);
+    }
+    
+    return {
+      success: true,
+      data: updateData?.[0] || userResult.data,
+      hsmKeyResult
+    };
     
   } catch (error) {
     console.error('Error in createUser:', error);

@@ -184,7 +184,7 @@ const ChatInterface = ({ username, userAddress }) => {
       const requestBody = {
         query: userQuery,
         username: username,
-        systemPrompt: "You are a helpful AI assistant that provides cryptocurrency analysis.Please keep your response under 200 characters"
+        systemPrompt: `You are a helpful AI assistant that provides cryptocurrency analysis. Please keep your response under 200 characters. The user's wallet address is: ${userAddress}`
       };
       console.log('ChatInterface: Request body:', requestBody);
       
