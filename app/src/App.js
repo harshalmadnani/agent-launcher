@@ -1,6 +1,7 @@
 import './App.css';
 import ChatInterface from './ChatInterface';
 import AgentLauncher from './AgentLauncher';
+import Terminal from './terminal';
 import Navbar from './Navbar';
 import { PrivyProvider } from '@privy-io/react-auth';
 import AuthGuard from './AuthGuard';
@@ -9,7 +10,7 @@ import { useState } from 'react';
 function App() {
   // Replace with your actual Privy app ID from your Privy dashboard
   const privyAppId = 'cm2flh2td04ih2tqbk42z7nsz';
-  const [activeComponent, setActiveComponent] = useState('chat'); // 'chat' or 'agent'
+  const [activeComponent, setActiveComponent] = useState('chat'); // 'chat', 'agent', or 'terminal'
   const [userAddress, setUserAddress] = useState(null);
 
   const handleNavigation = (component) => {
@@ -38,7 +39,9 @@ function App() {
             <AuthGuard>
               {activeComponent === 'chat' ? 
                 <ChatInterface userAddress={userAddress} /> : 
-                <AgentLauncher />
+                activeComponent === 'agent' ?
+                <AgentLauncher /> :
+                <Terminal />
               }
             </AuthGuard>
           </main>

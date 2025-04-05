@@ -95,8 +95,8 @@ async function getUserWalletAddress(username) {
     const userData = await response.json();
     console.log(`User data response:`, userData);
     
-    // Extract wallet address from response
-    const walletAddress = userData?.wallet_address || null;
+    // Extract wallet address from response - now looking for 'address' field
+    const walletAddress = userData?.address || null;
     
     if (walletAddress) {
       console.log(`Found wallet address for ${username}: ${walletAddress}`);
@@ -1192,10 +1192,19 @@ async function setupScraper(twitterCredentials) {
 
 // Function to fetch agent description
 async function getAgentDescription(agentId) {
+  // Convert agentId to number if it's a string
+  const numericAgentId = typeof agentId === 'string' ? parseInt(agentId, 10) : agentId;
+
+  // Validate agentId is a valid number
+  if (isNaN(numericAgentId)) {
+    console.error('Error fetching agent description: agentId must be a valid number');
+    return null;
+  }
+
   const { data, error } = await supabase
     .from('agents2')
     .select('description')
-    .eq('id', agentId)
+    .eq('id', numericAgentId)
     .single();
 
   if (error) {
@@ -1204,11 +1213,11 @@ async function getAgentDescription(agentId) {
   }
   
   if (!data?.description) {
-    console.log('No description found for agent:', agentId);
+    console.log('No description found for agent:', numericAgentId);
     return null;
   }
   
-  console.log('Retrieved description for agent', agentId);
+  console.log('Retrieved description for agent', numericAgentId);
   return data.description;
 }
 

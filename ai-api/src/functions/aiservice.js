@@ -371,6 +371,20 @@ const executeCode = async (code) => {
     const fn = new AsyncFunction(...Object.keys(contextWithLogCapture), `
       try {
         console.log('Starting async execution');
+        
+        // Wrap array operations in a safe handler
+        const safeMap = (arr, fn) => {
+          if (!arr) {
+            console.error('Attempted to map over undefined or null value');
+            return [];
+          }
+          if (!Array.isArray(arr)) {
+            console.error('Attempted to map over non-array value:', typeof arr);
+            return [];
+          }
+          return arr.map(fn);
+        };
+
         // Ensure the code returns a value
         const result = await (async () => {
           ${cleanCode}
