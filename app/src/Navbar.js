@@ -3,9 +3,9 @@ import './Navbar.css';
 import { usePrivy } from '@privy-io/react-auth';
 import { QRCodeSVG } from 'qrcode.react';
 
-const Navbar = ({ onNavigate, activeComponent }) => {
+const Navbar = ({ onNavigate, activeComponent, setUserAddress }) => {
   const { login, logout, authenticated, user, ready } = usePrivy();
-  const [userAddress, setUserAddress] = useState(null);
+  const [userAddress, setLocalUserAddress] = useState(null);
   const [showQRCode, setShowQRCode] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const qrModalRef = useRef(null);
@@ -67,7 +67,11 @@ const Navbar = ({ onNavigate, activeComponent }) => {
           
           if (address) {
             console.log('Navbar: Setting user address:', address);
-            setUserAddress(address);
+            setLocalUserAddress(address);
+            // Update the address in the parent component
+            if (setUserAddress) {
+              setUserAddress(address);
+            }
           } else {
             console.warn('Navbar: No address found in user data:', userData);
           }
@@ -83,7 +87,7 @@ const Navbar = ({ onNavigate, activeComponent }) => {
       console.log('Navbar: Authentication ready, fetching user address...');
       fetchUserAddress();
     }
-  }, [authenticated, user, ready]);
+  }, [authenticated, user, ready, setUserAddress]);
 
   // Close QR modal when clicking outside
   useEffect(() => {
