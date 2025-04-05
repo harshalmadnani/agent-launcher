@@ -3,7 +3,6 @@ const { createClient } = require('@supabase/supabase-js');
 const { Scraper} = require('twitter-agent');
 const fs = require('fs');
 require('dotenv').config();
-const axios = require('axios');
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -14,427 +13,6 @@ const port = process.env.PORT || 3001;
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
-const MULTIBAAS_API_URL = "https://sfhqqxqwkfaslnwm5ktynkxgja.multibaas.com";
-const MULTIBAAS_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiaWF0IjoxNzQzODM2NzE0LCJqdGkiOiJmZGViZTIwYS0xZGVmLTRiYWEtODYyZS00MWJmZWZmZjcxM2YifQ.cpG1R5Uyzoy6bL2-ijwV8HQOKk12JW9X4fuRr07qc7Q";
-// API key specific to the hev7x32zafgjtetf3b3t556i5m.multibaas.com endpoint
-const MULTIBAAS_HEV_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiaWF0IjoxNzQzODM4MTg4LCJqdGkiOiI3Mzg0ZTk5OS04MDQxLTQ3OTItYmE2Ny0yMTBjYjU3NTdmNGIifQ.t3TATnZk_IyI4RB-8exY42PD8JWQfKaf9JueTde5xTA";
-const MULTIBAAS_CLIENT_ID = "a863dd16-67cd-4460-bab3-225d8d9a6626";
-const MULTIBAAS_VAULT_NAME = "ethglobal-taipei-5";
-
-// Create a new HSM key in MultiBaas
-const createHsmKey = async (keyName) => {
-  try {
-    const response = await axios.post(
-      `${MULTIBAAS_API_URL}/api/v0/hsm/key/new`,
-      {
-        clientID: MULTIBAAS_CLIENT_ID,
-        keyName: keyName,
-        vaultName: MULTIBAAS_VAULT_NAME,
-        useHardwareModule: false
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${MULTIBAAS_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    
-    return {
-      success: true,
-      data: response.data
-    };
-  } catch (error) {
-    console.error('Error creating HSM key:', error.response?.data || error.message);
-    return {
-      success: false,
-      error: error.response?.data?.message || error.message
-    };
-  }
-};
-
-// Create a user with username in the users2 table
-const createUserWithUsername = async (username, userData = {}) => {
-  try {
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-      throw new Error('Supabase credentials not configured');
-    }
-    
-    if (!username || typeof username !== 'string' || username.trim() === '') {
-      throw new Error('Valid username is required');
-    }
-    
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-    
-    const { data: existingUser, error: checkError } = await supabase
-      .from('users2')
-      .select('username')
-      .eq('username', username)
-      .single();
-    
-    if (checkError && checkError.code !== 'PGRST116') {
-      throw new Error(`Error checking username: ${checkError.message}`);
-    }
-    
-    if (existingUser) {
-      return {
-        success: false,
-        error: 'Username already exists'
-      };
-    }
-    
-    // First create the user record
-    const userRecord = {
-      username,
-      created_at: new Date().toISOString(),
-      ...userData
-    };
-    
-    const { data, error } = await supabase
-      .from('users2')
-      .insert([userRecord])
-      .select();
-    
-    if (error) {
-      throw new Error(`Error creating user: ${error.message}`);
-    }
-    
-    // After user is created, use the user's ID as the key name for HSM key
-    const userId = data[0].id;
-    const formattedUsername = `user${userId}`; // Using the same format for username
-    const keyName = formattedUsername; // Using alphanumeric name format
-    
-    // Update the username to match the HSM key format
-    const { data: usernameUpdateData, error: usernameUpdateError } = await supabase
-      .from('users2')
-      .update({ username: formattedUsername })
-      .eq('id', userId)
-      .select();
-    
-    if (usernameUpdateError) {
-      console.error(`Error updating username: ${usernameUpdateError.message}`);
-      // Continue despite error in updating username
-    } else {
-      console.log(`Successfully updated username to ${formattedUsername}`);
-      // Use the updated user data
-      data[0] = usernameUpdateData[0];
-    }
-    
-    // Create an HSM key for the user using ID as key name
-    console.log(`Creating HSM key with name: ${keyName} for user: ${formattedUsername}`);
-    const hsmKeyResult = await createHsmKey(keyName);
-    
-    if (!hsmKeyResult.success) {
-      console.error(`Failed to create HSM key for user ${formattedUsername}:`, hsmKeyResult.error);
-      // We already created the user, so return successful user creation despite HSM failure
-      return {
-        success: true,
-        data: data[0],
-        hsm_key_result: hsmKeyResult
-      };
-    }
-    
-    console.log(`Successfully created HSM key for user ${formattedUsername}`);
-    
-    // Add the created HSM key using addHsmKey
-    if (hsmKeyResult.data && 
-        hsmKeyResult.data.result && 
-        hsmKeyResult.data.result.keyName && 
-        hsmKeyResult.data.result.keyVersion) {
-      
-      const { keyName, keyVersion } = hsmKeyResult.data.result;
-      console.log(`Adding HSM key to system with keyName: ${keyName}, keyVersion: ${keyVersion}`);
-      
-      const addKeyResult = await addHsmKey(keyName, keyVersion);
-      if (!addKeyResult.success) {
-        console.error(`Failed to add HSM key: ${addKeyResult.error}`);
-      } else {
-        console.log(`Successfully added HSM key to system`);
-        // Add the addKeyResult to hsmKeyResult for complete tracking
-        hsmKeyResult.addKeyResult = addKeyResult;
-      }
-    }
-    
-    // Update the user record with address and HSM key data if available
-    let updatedData = data[0];
-    
-    if (hsmKeyResult.data) {
-      const updateFields = { hsm_key_data: hsmKeyResult.data };
-      
-      // If publicAddress is available in HSM response, use it
-      if (hsmKeyResult.data.result && hsmKeyResult.data.result.publicAddress) {
-        const publicAddress = hsmKeyResult.data.result.publicAddress;
-        console.log(`Updating user with address: ${publicAddress}`);
-        updateFields.address = publicAddress;
-      }
-      
-      const { data: updateData, error: updateError } = await supabase
-        .from('users2')
-        .update(updateFields)
-        .eq('id', userId)
-        .select();
-      
-      if (updateError) {
-        console.error(`Error updating user with HSM data: ${updateError.message}`);
-      } else {
-        updatedData = updateData[0];
-        console.log(`Successfully updated user with HSM data`);
-      }
-    }
-    
-    return {
-      success: true,
-      data: updatedData,
-      hsm_key_result: hsmKeyResult
-    };
-  } catch (error) {
-    console.error('Error in createUserWithUsername:', error);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-};
-
-// Get user by username from the users2 table
-const getUserByUsername = async (username) => {
-  try {
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-      throw new Error('Supabase credentials not configured');
-    }
-    
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-    
-    const { data, error } = await supabase
-      .from('users2')
-      .select('*')
-      .eq('username', username)
-      .single();
-    
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return {
-          success: false,
-          error: 'User not found'
-        };
-      }
-      throw new Error(`Error getting user: ${error.message}`);
-    }
-    
-    return {
-      success: true,
-      data
-    };
-  } catch (error) {
-    console.error('Error in getUserByUsername:', error);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-};
-
-// Add an existing HSM key to MultiBaas
-const addHsmKey = async (keyName, keyVersion) => {
-  try {
-    console.log(`Adding HSM key: ${keyName} with version: ${keyVersion}`);
-    
-    // Log the request details that will be sent
-    const url = 'https://hev7x32zafgjtetf3b3t556i5m.multibaas.com/api/v0/hsm/key';
-    const requestData = {
-      clientID: MULTIBAAS_CLIENT_ID,
-      keyName: keyName,
-      vaultName: MULTIBAAS_VAULT_NAME,
-      keyVersion: keyVersion
-    };
-    
-    // Use the exact token that worked with curl directly
-    const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxIiwiaWF0IjoxNzQzODM4MTg4LCJqdGkiOiI3Mzg0ZTk5OS04MDQxLTQ3OTItYmE2Ny0yMTBjYjU3NTdmNGIifQ.t3TATnZk_IyI4RB-8exY42PD8JWQfKaf9JueTde5xTA";
-    const headers = {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    };
-    
-    console.log('URL:', url);
-    console.log('Request data:', JSON.stringify(requestData));
-    console.log('Headers:', JSON.stringify(headers));
-    
-    const response = await axios.post(url, requestData, { headers });
-    
-    console.log(`Successfully added HSM key ${keyName}`);
-    return {
-      success: true,
-      data: response.data
-    };
-  } catch (error) {
-    console.error(`Error adding HSM key ${keyName}:`, error.response?.data || error.message);
-    // More detailed error logging
-    if (error.response) {
-      console.error('Response status:', error.response.status);
-      console.error('Response headers:', error.response.headers);
-      console.error('Response data:', error.response.data);
-    } else if (error.request) {
-      console.error('No response received:', error.request);
-    } else {
-      console.error('Error setting up request:', error.message);
-    }
-    console.error('Error config:', error.config);
-    
-    return {
-      success: false,
-      error: error.response?.data?.message || error.message
-    };
-  }
-};
-// Function to create a user with their Twitter username
-const createUserWithTwitterUsername = async (username) => {
-  try {
-    console.log(`Creating new user for Twitter username: ${username}`);
-    
-    // First try calling the Agent Launcher API
-    try {
-      const response = await axios.post(
-        'https://agent-launcher.onrender.com/api/users',
-        {
-          username: username,
-          source: 'twitter'
-        }
-      );
-      
-      if (response.data.success) {
-        console.log(`Successfully created user for Twitter username: ${username} via API`);
-        return {
-          success: true,
-          data: response.data.data
-        };
-      }
-    } catch (apiError) {
-      console.log(`API call failed: ${apiError.message}. Falling back to direct database creation.`);
-      // Continue to fallback method
-    }
-    
-    // Fallback: Create user directly in Supabase
-    console.log(`Creating user directly in database for: ${username}`);
-    
-    // Check if user already exists
-    const { data: existingUser, error: checkError } = await supabase
-      .from('users2')
-      .select('username')
-      .eq('username', username)
-      .single();
-    
-    if (!checkError && existingUser) {
-      console.log(`User ${username} already exists in the database`);
-      return {
-        success: false,
-        error: 'Username already exists'
-      };
-    }
-    
-    if (checkError && checkError.code !== 'PGRST116') {
-      console.error(`Error checking if user exists: ${checkError.message}`);
-    }
-    
-    // Create user record
-    const userRecord = {
-      username: username,
-      created_at: new Date().toISOString(),
-      source: 'twitter'
-    };
-    
-    const { data, error } = await supabase
-      .from('users2')
-      .insert([userRecord])
-      .select();
-    
-    if (error) {
-      throw new Error(`Error creating user record: ${error.message}`);
-    }
-    
-    console.log(`Successfully created basic user record for: ${username}`);
-    
-    // We don't have HSM key creation capability here, so return success with the data we have
-    return {
-      success: true,
-      data: data[0],
-      note: 'User created without wallet'
-    };
-    
-  } catch (error) {
-    console.error(`Error creating user for Twitter username ${username}:`, error.message);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-};
-
-const getAddressFromUsername = async (username) => {
-  try {
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Supabase credentials not configured');
-    }
-    
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    
-    const { data, error } = await supabase
-      .from('users2')
-      .select('address')
-      .eq('username', username)
-      .single();
-    
-    if (error) {
-      if (error.code === 'PGRST116') {
-        console.log(`User not found: ${username}. Attempting to create user...`);
-        
-        // Try to create a new user with this username using the standard function
-        const createResult = await createUserWithUsername(username, { source: 'twitter' });
-        
-        if (!createResult.success) {
-          console.error(`Failed to create user for ${username}:`, createResult.error);
-          return {
-            success: false,
-            error: 'User not found and could not be created'
-          };
-        }
-        
-        // Return the address from the newly created user
-        if (createResult.data && createResult.data.address) {
-          console.log(`Created new user with address: ${createResult.data.address}`);
-          return {
-            success: true,
-            address: createResult.data.address,
-            isNewUser: true
-          };
-        } else {
-          return {
-            success: false,
-            error: 'User created but address not available'
-          };
-        }
-      }
-      throw new Error(`Error getting user address: ${error.message}`);
-    }
-    
-    if (!data.address) {
-      return {
-        success: false,
-        error: 'Address not found for this user'
-      };
-    }
-    
-    return {
-      success: true,
-      address: data.address
-    };
-  } catch (error) {
-    console.error('Error in getAddressFromUsername:', error);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-};
 
 // Function to fetch Twitter credentials
 async function getTwitterCredentials(agentId) {
@@ -499,6 +77,36 @@ async function getTwitterCredentials(agentId) {
   }
   
   return credentials;
+}
+
+// Function to fetch user wallet address
+async function getUserWalletAddress(username) {
+  try {
+    console.log(`Fetching wallet address for username: ${username}`);
+    const response = await fetch(`https://agent-launcher.onrender.com/user?username=${username}`);
+    
+    if (!response.ok) {
+      console.error(`API request failed with status: ${response.status}`);
+      return null;
+    }
+    
+    const userData = await response.json();
+    console.log(`User data response:`, userData);
+    
+    // Extract wallet address from response
+    const walletAddress = userData?.wallet_address || null;
+    
+    if (walletAddress) {
+      console.log(`Found wallet address for ${username}: ${walletAddress}`);
+    } else {
+      console.log(`No wallet address found for ${username}`);
+    }
+    
+    return walletAddress;
+  } catch (error) {
+    console.error(`Error fetching user wallet address:`, error);
+    return null;
+  }
 }
 
 // Function to post tweet using twitter-agent with cookie-based authentication
@@ -747,12 +355,20 @@ async function getTargetUserTweets(agentId) {
 }
 
 // Function to get AI analysis for a tweet
-async function getAIAnalysis(tweetText, address = null) {
+async function getAIAnalysis(tweetText, username) {
   try {
-    // Check if this is a new user from the tweet text
-    const isNewUser = tweetText.includes('[NEW USER]');
-    // Remove the tag from the tweet text
-    const cleanTweetText = tweetText.replace('[NEW USER]', '').trim();
+    // Try to get wallet address if username is provided
+    let walletAddress = null;
+    if (username) {
+      walletAddress = await getUserWalletAddress(username);
+    }
+    
+    // Construct the system prompt with wallet address if available
+    let systemPrompt = "You are a helpful AI assistant. Analyze the tweet and provide a natural, engaging response. Keep responses concise and friendly. Don't use hashtags or emojis unless they were in the original tweet, dont mention any data errors and keep it under 200 characters.You are a twitter reply guy";
+    
+    if (walletAddress) {
+      systemPrompt += ` The address of the user you're responding to is ${walletAddress}.`;
+    }
     
     const response = await fetch('https://agent-launcher.onrender.com/analyze', {
       method: 'POST',
@@ -760,10 +376,8 @@ async function getAIAnalysis(tweetText, address = null) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        query: cleanTweetText,
-        address: address,
-        isNewUser: isNewUser,
-        systemPrompt: "You are a helpful AI assistant. Analyze the tweet and provide a natural, engaging response. Keep responses concise and friendly. Don't use hashtags or emojis unless they were in the original tweet, dont mention any data errors and keep it under 200 characters.You are a twitter reply guy" + (isNewUser ? " If this is a new user, welcome them to the service and briefly mention their new wallet was created." : "")
+        query: tweetText,
+        systemPrompt: systemPrompt
       })
     });
 
@@ -812,28 +426,7 @@ async function getAIAnalysis(tweetText, address = null) {
 // Update the generateMentionReply function to use AI analysis
 async function generateMentionReply(tweet) {
   try {
-    // Get the user's address from their username
-    const addressResult = await getAddressFromUsername(tweet.username);
-    const userAddress = addressResult.success ? addressResult.address : null;
-    const isNewUser = addressResult.isNewUser || false;
-    
-    if (userAddress) {
-      console.log(`Found address for @${tweet.username}: ${userAddress}`);
-      if (isNewUser) {
-        console.log(`This is a newly created user!`);
-      }
-    } else {
-      console.log(`No address found for @${tweet.username}`);
-    }
-    
-    // Include additional context for AI when this is a new user
-    let tweetContext = tweet.text || '';
-    if (isNewUser) {
-      tweetContext = `[NEW USER] ${tweetContext}`;
-    }
-    
-    // Even if we don't have a user address, still analyze the tweet content
-    const analysis = await getAIAnalysis(tweetContext, userAddress);
+    const analysis = await getAIAnalysis(tweet.text || '', tweet.username);
     
     if (analysis) {
       // Ensure the reply starts with the username mention
@@ -846,13 +439,6 @@ async function generateMentionReply(tweet) {
     // Fallback to default responses if AI analysis fails
     let replyText = `@${tweet.username} `;
     const tweetText = tweet.text?.toLowerCase() || '';
-    
-    if (isNewUser) {
-      replyText += "Welcome! I've created a wallet for you. ";
-    } else if (!userAddress && addressResult.error && addressResult.error.includes('not found')) {
-      // Don't mention the wallet creation if it failed, just respond normally
-      console.log('User creation failed, responding without wallet reference');
-    }
     
     if (tweetText.includes('help') || tweetText.includes('how')) {
       replyText += "I'll be happy to help! Please provide more details.";
@@ -899,7 +485,6 @@ async function replyToMentions(scraper, credentials, maxMentions = 10, delayMs =
     console.log(`Max mentions to process: ${maxMentions}`);
     console.log(`Delay between replies: ${delayMs}ms`);
     console.log(`Looking back: ${intervalMinutes} minutes`);
-    console.log(`Will attempt to get wallet addresses for users`);
 
     if (!myUsername) {
       console.error('ERROR: No username found in credentials:', credentials);
@@ -975,7 +560,6 @@ async function replyToMentions(scraper, credentials, maxMentions = 10, delayMs =
       try {
         console.log(`\n📝 Processing reply to @${tweet.username}`);
         console.log(`Original tweet: "${tweet.text?.substring(0, 100)}..."`);
-        console.log(`Looking up user's wallet address...`);
         
         await rateLimiter.wait();
         console.log('Rate limit respected');
