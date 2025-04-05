@@ -290,6 +290,7 @@ Please analyze this data and provide insights that directly address the user's q
  */
 const executeCode = async (code) => {
   try {
+    const startTime = Date.now();
     // Clean and validate the code input
     if (!code || typeof code !== 'string') {
       console.error('Invalid code input:', { codeType: typeof code, codeLength: code?.length });
