@@ -114,6 +114,10 @@ const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
   - fetchMetadata(coinname) - returns metadata
   - fetchHistoricPortfolioData(from, to, addresses) - returns historic portfolio data
   - fetchWalletPortfolio(address) - returns wallet portfolio
+
+  -Metal functions:
+    -distributeTokens(address, amount, sendTo) - distributes tokens to an address
+    -launchToken(name, ticker, merchantAddress) - launches a token
 IMPORTANT TOKEN ADDRESSES:
 - ETH on any network: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'
 - USDC on Base: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
