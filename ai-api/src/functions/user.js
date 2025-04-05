@@ -279,9 +279,55 @@ const addHsmKey = async (keyName, keyVersion) => {
   }
 };
 
+// Get address from username
+const getAddressFromUsername = async (username) => {
+  try {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+      throw new Error('Supabase credentials not configured');
+    }
+    
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    
+    const { data, error } = await supabase
+      .from('users2')
+      .select('address')
+      .eq('username', username)
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') {
+        return {
+          success: false,
+          error: 'User not found'
+        };
+      }
+      throw new Error(`Error getting user address: ${error.message}`);
+    }
+    
+    if (!data.address) {
+      return {
+        success: false,
+        error: 'Address not found for this user'
+      };
+    }
+    
+    return {
+      success: true,
+      address: data.address
+    };
+  } catch (error) {
+    console.error('Error in getAddressFromUsername:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
 module.exports = {
   createUserWithUsername,
   getUserByUsername,
   createHsmKey,
-  addHsmKey
+  addHsmKey,
+  getAddressFromUsername
 };
