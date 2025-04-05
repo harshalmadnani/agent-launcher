@@ -1,7 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  TextField, 
-  IconButton, 
   Select, 
   MenuItem, 
   FormControl, 
@@ -9,7 +7,6 @@ import {
   Box,
   Paper
 } from '@mui/material';
-import SendIcon from '@mui/icons-material/Send';
 import { createClient } from '@supabase/supabase-js';
 import { styled } from '@mui/material/styles';
 
@@ -19,39 +16,64 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const TerminalContainer = styled(Box)(({ theme }) => ({
   height: '100vh',
-  display: 'flex',
-  flexDirection: 'column',
+  width: '100%',
   backgroundColor: '#000',
   color: '#fff',
-  padding: theme.spacing(2),
+  display: 'flex',
+  flexDirection: 'column',
+  gap: theme.spacing(2),
+paddingTop:'5%'
 }));
 
 const TerminalOutput = styled(Paper)(({ theme }) => ({
-  flex: 1,
   padding: theme.spacing(2),
   overflowY: 'auto',
-  fontFamily: 'monospace',
+  fontFamily: 'JetBrains Mono, Consolas, monospace',
   fontSize: '14px',
-  backgroundColor: '#000',
-  lineHeight: '1.8',
+  backgroundColor: '#1A1A1A',
+  lineHeight: '1.6',
   border: '1px solid #333',
-  borderRadius: '4px',
+  borderRadius: theme.spacing(1),
   color: '#fff',
+  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+  flex: 1,
+  '&::-webkit-scrollbar': {
+    width: '8px',
+  },
+  '&::-webkit-scrollbar-track': {
+    background: '#1A1A1A',
+  },
+  '&::-webkit-scrollbar-thumb': {
+    background: '#333',
+    borderRadius: '4px',
+    '&:hover': {
+      background: '#444',
+    },
+  },
 }));
 
 const MessageContainer = styled('div')(({ theme }) => ({
   color: '#fff',
-  marginBottom: theme.spacing(2),
+  marginBottom: theme.spacing(1.5),
+  backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  borderRadius: theme.spacing(0.5),
+  transition: 'background-color 0.2s ease',
+  '&:hover': {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
 }));
 
 const AgentName = styled('span')(({ theme }) => ({
-  color: '#64ff64',
+  color: '#00FF9C',
+  fontWeight: 500,
+  marginRight: theme.spacing(1),
 }));
 
 const Timestamp = styled('span')(({ theme }) => ({
   color: '#666',
   marginLeft: theme.spacing(1),
   fontSize: '12px',
+  opacity: 0.8,
 }));
 
 function Terminal() {
@@ -133,22 +155,61 @@ function Terminal() {
 
   return (
     <TerminalContainer>
-      <FormControl fullWidth sx={{ mb: 2 }}>
-        <InputLabel id="agent-select-label" sx={{ color: '#fff' }}>Select Agent</InputLabel>
+      <FormControl variant="outlined" size="small">
+        <InputLabel id="agent-select-label" sx={{ color: '#aaa' }}>Select Agent</InputLabel>
         <Select
           labelId="agent-select-label"
           value={selectedAgent}
           onChange={(e) => setSelectedAgent(e.target.value)}
           sx={{ 
             color: '#fff',
-            backgroundColor: '#1a1a1a',
+            backgroundColor: '#1E1E1E',
+            width: '100%',
+            height: '100%',
+            borderRadius: 1,
             '& .MuiSelect-icon': {
-              color: '#fff'
+              color: '#00FF9C'
+            },
+            '& .MuiOutlinedInput-notchedOutline': {
+              borderColor: '#333',
+              borderWidth: '1px',
+            },
+            '&:hover .MuiOutlinedInput-notchedOutline': {
+              borderColor: '#00FF9C',
+            },
+            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+              borderColor: '#00FF9C',
+              borderWidth: '1px',
+            },
+            '& .MuiList-root': {
+              backgroundColor: '#1E1E1E',
+            },
+            '& .MuiPaper-root': {
+              backgroundColor: '#1E1E1E',
             }
           }}
         >
+          <MenuItem value="" disabled>
+            <em style={{ color: '#666' }}>Select an agent</em>
+          </MenuItem>
           {agents.map((agent) => (
-            <MenuItem key={agent.id} value={agent.id}>
+            <MenuItem 
+              key={agent.id} 
+              value={agent.id}
+              sx={{
+                color: '#fff',
+                backgroundColor: '#1E1E1E',
+                '&:hover': {
+                  backgroundColor: '#2C2C2C',
+                },
+                '&.Mui-selected': {
+                  backgroundColor: '#383838',
+                  '&:hover': {
+                    backgroundColor: '#404040',
+                  }
+                }
+              }}
+            >
               {agent.name}
             </MenuItem>
           ))}
@@ -156,19 +217,25 @@ function Terminal() {
       </FormControl>
 
       <TerminalOutput ref={terminalRef}>
-        {history.map((entry, index) => (
-          <MessageContainer key={index}>
-            <AgentName>
-              {entry.type === 'input' ? '> ' : `${agentNames[entry.agentId] || `Agent ${entry.agentId}`}: `}
-            </AgentName>
-            {entry.content}
-            {entry.timestamp && (
-              <Timestamp>
-                {entry.timestamp.toLocaleString()}
-              </Timestamp>
-            )}
+        {history.length === 0 ? (
+          <MessageContainer style={{ textAlign: 'center', color: '#666' }}>
+            Select an agent to view their messages
           </MessageContainer>
-        ))}
+        ) : (
+          history.map((entry, index) => (
+            <MessageContainer key={index}>
+              <AgentName>
+                {entry.type === 'input' ? '> ' : `${agentNames[entry.agentId] || `Agent ${entry.agentId}`}: `}
+              </AgentName>
+              <span style={{ wordBreak: 'break-word' }}>{entry.content}</span>
+              {entry.timestamp && (
+                <Timestamp>
+                  {entry.timestamp.toLocaleString()}
+                </Timestamp>
+              )}
+            </MessageContainer>
+          ))
+        )}
       </TerminalOutput>
     </TerminalContainer>
   );

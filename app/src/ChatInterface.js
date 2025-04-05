@@ -346,50 +346,6 @@ const ChatInterface = ({ username, userAddress }) => {
     }
   };
 
-  const handlePresetQuestion = async (question) => {
-    console.log('Preset question selected:', question);
-    
-    if (isLoading) {
-      console.log('Preset question blocked: loading in progress');
-      return;
-    }
-    
-    if (isWelcomeScreen) {
-      console.log('Exiting welcome screen via preset question');
-      setIsWelcomeScreen(false);
-    }
-    
-    // Add user message
-    const newUserMessage = {
-      id: messages.length + 1,
-      text: question,
-      sender: 'user'
-    };
-    
-    console.log('Adding preset question as user message:', { id: newUserMessage.id });
-    setMessages(prevMessages => [...prevMessages, newUserMessage]);
-    setInputValue('');
-    
-    // Fetch bot response
-    console.log('Initiating bot response fetch for preset question');
-    try {
-      await fetchBotResponse(question);
-      console.log('Preset question bot response fetch completed successfully');
-    } catch (err) {
-      console.error('Unhandled error in fetchBotResponse for preset question:', err);
-    }
-  };
-
-  const presetQuestions = [
-    "What is Eigen Layer?",
-    "What is the price of BTC?",
-    "How do I buy BTC?",
-    "What is the price of ETH?",
-    "Who is Satoshi Nakamoto?",
-    "What is HyperLiquid?",
-    "How much is PEPE?"
-  ];
-
   console.log('Rendering ChatInterface, mode:', isWelcomeScreen ? 'welcome screen' : 'chat view');
   
   return (
@@ -398,7 +354,7 @@ const ChatInterface = ({ username, userAddress }) => {
         <div className="welcome-screen">
           <h1 className="welcome-title">Yo, what's on your mind?</h1>
           <p className="welcome-subtitle">
-            Choose one of the most common prompts or use your own
+            Ask me anything
           </p>
           
           <form className="chat-input-container welcome-input" onSubmit={handleSubmit}>
@@ -413,18 +369,6 @@ const ChatInterface = ({ username, userAddress }) => {
               →
             </button>
           </form>
-          
-          <div className="preset-questions">
-            {presetQuestions.map((question, index) => (
-              <button
-                key={index}
-                className="preset-question-button"
-                onClick={() => handlePresetQuestion(question)}
-              >
-                {question}
-              </button>
-            ))}
-          </div>
         </div>
       ) : (
         <>
