@@ -30,8 +30,8 @@ const extractImageUrl = (text) => {
     return markdownMatch[1];
   }
 
-  // Regular expression to match Supabase URL patterns
-  const supabaseUrlRegex = /(https?:\/\/\S+\.supabase\.\S+\/storage\/v\S+\.(jpg|jpeg|png|gif|webp)(\?\S*)?)/i;
+  // Enhanced Supabase URL pattern to match both storage and CDN URLs
+  const supabaseUrlRegex = /(https?:\/\/\S+\.supabase\.(co|in)\/storage\/v1\/object\/(?:public|sign)\/\S+\.(jpg|jpeg|png|gif|webp)(\?\S*)?)/i;
   const supabaseMatch = text.match(supabaseUrlRegex);
   if (supabaseMatch) {
     console.log('Found Supabase image URL:', supabaseMatch[0]);
@@ -68,7 +68,17 @@ const testImageUrl = (url) => {
     
     img.onerror = () => {
       console.log('Image URL failed to load:', url);
-      resolve(false);
+      // For Supabase URLs, try adding a timestamp to bypass cache
+      if (url.includes('supabase') && !url.includes('?')) {
+        const timestampedUrl = `${url}?t=${Date.now()}`;
+        console.log('Retrying with timestamped URL:', timestampedUrl);
+        const retryImg = new Image();
+        retryImg.onload = () => resolve(true);
+        retryImg.onerror = () => resolve(false);
+        retryImg.src = timestampedUrl;
+      } else {
+        resolve(false);
+      }
     };
     
     img.src = url;
@@ -391,22 +401,38 @@ const ChatInterface = ({ username, userAddress }) => {
                           alt="Generated content" 
                           className="response-image"
                           loading="lazy"
-                          onLoad={() => {
+                          onLoad={(e) => {
                             console.log('Image loaded successfully:', message.imageUrl);
+                            e.target.classList.add('loaded');
                           }}
                           onError={(e) => {
                             console.error('Image failed to load:', message.imageUrl);
-                            // Try with a CORS proxy as fallback
-                            if (!e.target.src.includes('cors-anywhere') && !e.target.src.includes('proxy')) {
-                              console.log('Retrying with CORS proxy');
-                              // Try with a different CORS proxy
-                              e.target.src = `https://api.allorigins.win/raw?url=${encodeURIComponent(message.imageUrl)}`;
-                            } else {
-                              // If proxy also fails, hide the image container
-                              const container = e.target.parentNode;
-                              if (container) {
-                                container.style.display = 'none';
+                            const url = e.target.src;
+                            
+                            // Handle Supabase storage URLs
+                            if (url.includes('supabase')) {
+                              console.log('Handling Supabase image error');
+                              
+                              // Try adding a timestamp to bypass cache
+                              if (!url.includes('?')) {
+                                const timestampedUrl = `${url}?t=${Date.now()}`;
+                                console.log('Retrying with timestamped URL:', timestampedUrl);
+                                e.target.src = timestampedUrl;
+                                return;
                               }
+                              
+                              // If timestamped URL also fails, try with CORS proxy
+                              if (!url.includes('cors-anywhere')) {
+                                console.log('Retrying with CORS proxy');
+                                e.target.src = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+                                return;
+                              }
+                            }
+                            
+                            // If all retries fail, hide the image container
+                            const container = e.target.parentNode;
+                            if (container) {
+                              container.style.display = 'none';
                             }
                           }}
                           onClick={() => window.open(message.imageUrl, '_blank')}

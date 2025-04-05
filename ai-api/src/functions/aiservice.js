@@ -123,7 +123,7 @@ const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
     -distributeToUsernames(address, toUsername, amount) - distributes tokens to a username
 
     -Curvegrid functions:
-    -getTransactionHistory(address) - returns transaction history only for the address of self
+    -getTransactionHistory(address) - returns transaction history
 
 IMPORTANT TOKEN ADDRESSES:
 - ETH on any network: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'
@@ -239,7 +239,7 @@ const characterAPI = async (userInput, executedData, systemPrompt, model = 'deep
     const messages = [
       {
         role: "system",
-        content: systemPrompt
+        content: `${systemPrompt} Always return the Supabase URL if it's included in the data.`
       },
       {
         role: "user",
