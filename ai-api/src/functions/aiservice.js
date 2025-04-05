@@ -379,7 +379,6 @@ const analyzeQuery = async (userInput, systemPrompt, model = 'deepseek-r1-distil
     let dataFetchingCode;
     try {
       dataFetchingCode = await dataAPI(userInput, model);
-      console.log('Data fetching code generated:', dataFetchingCode);
       if (!dataFetchingCode) {
         throw new Error('Failed to generate data fetching code');
       }
@@ -398,9 +397,8 @@ const data = {
   )
 };
 return data;`;
-        console.log('Using fallback code for portfolio chart:', dataFetchingCode);
       } else {
-        throw codeGenError; // Re-throw if we can't generate fallback code
+        throw codeGenError;
       }
     }
 
@@ -409,68 +407,57 @@ return data;`;
     let executedData;
     try {
       executedData = await executeCode(dataFetchingCode);
-      console.log('Executed data:', executedData);
     } catch (execError) {
       console.error('Error executing data fetching code:', execError);
       executedData = {
         error: true,
         message: execError.message,
         partialData: {},
-        timestamp: new Date().toISOString(),
-        _executionLogs: [{ type: 'error', content: `Execution error: ${execError.message}` }]
+        timestamp: new Date().toISOString()
       };
     }
 
-    // Extract execution logs
+    // Store execution logs separately and remove from data
     const executionLogs = executedData._executionLogs || [];
-    // Remove logs from the data passed to AI to avoid confusion
-    if (executedData._executionLogs) {
-      delete executedData._executionLogs;
-    }
+    delete executedData._executionLogs;
 
-    // Even if there are errors, still proceed with any partial data
-    let analysisData = executedData;
-    
-    // If we got an error but have partial data, use that
-    if (executedData.error && executedData.partialData) {
-      console.log('Using partial data for analysis despite errors');
-      analysisData = {
-        ...executedData.partialData,
-        errorInfo: {
-          message: executedData.message,
-          timestamp: executedData.timestamp
-        }
-      };
-    }
+    // Prepare minimal data for analysis
+    let analysisData = executedData.error ? 
+      {
+        error: executedData.message,
+        partialData: executedData.partialData || {}
+      } : 
+      executedData;
+
+    // Remove any verbose or redundant data
+    if (analysisData.debugInfo) delete analysisData.debugInfo;
+    if (analysisData.timestamp) delete analysisData.timestamp;
 
     // Step 3: Analyze the data using the specified model
     console.log('Step 3: Generating analysis and insights...');
     let analysis;
     try {
-      analysis = await characterAPI(userInput, analysisData, systemPrompt, model);
-      console.log('Generated analysis:', analysis);
+      // Prepare a concise version of the data for analysis
+      const condensedInput = `Question: ${userInput}\nKey Data Points: ${JSON.stringify(analysisData, null, 1).slice(0, 1000)}`;
+      analysis = await characterAPI(condensedInput, analysisData, systemPrompt, model);
       if (!analysis) {
         throw new Error('Empty analysis returned');
       }
     } catch (analysisError) {
       console.error('Error generating analysis:', analysisError);
-      // Provide fallback analysis
-      analysis = `Based on your request for portfolio data${executedData.error ? 
-        ", there was an issue retrieving the information. Please check that you're using a valid wallet address and try again." : 
-        ", I've successfully retrieved the data. Your portfolio information is now available."}`;
+      analysis = `Based on your request${executedData.error ? 
+        ", there was an issue retrieving the information. Please check your input and try again." : 
+        ", I've successfully retrieved the data. Here's what I found."}`;
     }
 
+    // Return results with minimal debug info
     return {
       success: true,
       data: {
         rawData: executedData,
         analysis: analysis,
         debugInfo: {
-          generatedCode: dataFetchingCode,
-          systemPrompt: systemPrompt,
-          model: model,
-          timestamp: new Date().toISOString(),
-          executionLogs: executionLogs
+          timestamp: new Date().toISOString()
         }
       }
     };
@@ -481,8 +468,7 @@ return data;`;
       success: false,
       error: {
         message: error.message,
-        timestamp: new Date().toISOString(),
-        details: error.stack
+        timestamp: new Date().toISOString()
       }
     };
   }
