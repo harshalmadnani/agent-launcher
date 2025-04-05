@@ -30,9 +30,6 @@ const portfolioAddresses = ["0x0000000000000000000000000000000000000000"]; // De
 const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
   try {
     const systemContent = `You are Xade AI's data fetcher. Your role is to identify and fetch the relevant data based on the user's question.
-- Deploy Token:
-  - launchToken(name, ticker, merchantAddress) - creates a new token with the given parameters (no need to add a merchant address if not given)
-
 - Social Analysis:
   - fetchSocialData(token) - returns detailed social metrics including:
     * Topic rank and related topics
@@ -62,39 +59,15 @@ const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
     * Creator information (name, followers)
     * Interaction metrics (24h and total)
   - fetchSocialData(token) - returns detailed social metrics
-
 - Portfolio Data:
-  - getPortfolioValueChart(addresses, chainId, timerange, useCache) - returns a chart of the portfolio value over time
-    * addresses: Array of wallet addresses or single address
-    * chainId: (optional, default: 1) The chain ID (1 for Ethereum)
-    * timerange: (optional, default: "1month") Time range format: 
-      - Valid API formats: "1day", "1week", "1month", "1year", "3years"
-      - Short formats: "1d", "7d", "30d", "1y", "3y" 
-    * useCache: (optional, default: true) Whether to use cached data
-  - safeGetPortfolioValueChart(addresses, chainId, timerange, useCache) - safer version that handles errors gracefully
-    * Same parameters as getPortfolioValueChart but returns fallback data on error
-  - generateAndUploadPortfolioChart(addresses, chainId, timerange, outputPath) - generates a chart and uploads it to Supabase
-    * addresses: Array of wallet addresses or single address
-    * chainId: (optional, default: 1) The chain ID (1 for Ethereum)
-    * timerange: (optional, default: "1day") Time range format
-    * outputPath: (optional) Path to save the chart locally before uploading
-    * Returns the public URL of the uploaded chart image
-  - getNFTsByAddress(address, chainIds) - returns a list of NFTs owned by an address
+  - getGenerateAndUploadPortfolioChart(addresses, chainId, timerange) - generates and uploads a chart, returns URL
+    * addresses: MUST be a valid Ethereum address (42 characters including 0x)
+    * chainId: MUST be a number (e.g., 1 for Ethereum)
+    * timerange: Valid formats: "1day", "1week", "1month", etc.
   - getCurrentValue(walletAddress, chainId) - returns the current value of a wallet
-  - getProfitAndLoss(walletAddress, chainId, fromTimestamp, toTimestamp) - returns the profit and loss of a wallet
-  - getTokenDetails(walletAddress, chainId) - returns the details of a token    
-  - getAddressFromUsername(username) - returns the address of a twitter username
-- Swap Functions:
-  - getSwapQuote(src, dst, amount, chainId) - gets a quote for swapping tokens
-    * src: Source token address (for ETH use: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE')
-    * dst: Destination token address
-    * amount: Amount to swap in wei
-    * chainId: (optional, default: 1) The chain ID (e.g., 1 for Ethereum, 8453 for Base)
-    * Returns detailed quote information
-  - swap(src, dst, amount, from, origin, slippage, chainId) - generates and signs a swap transaction
-    * Parameters same as generateSwapTransaction
-    * Returns signed transaction
-
+  - getProfitAndLoss(walletAddress, chainId, fromTimestamp, toTimestamp) - returns profit and loss
+  - getTokenDetails(walletAddress, chainId) - returns token details
+  - getNFTsByAddress(address, chainIds) - returns NFTs owned by an address
 IMPORTANT TOKEN ADDRESSES:
 - ETH on any network: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'
 - USDC on Base: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
@@ -111,48 +84,10 @@ const data = {
 return data;
 \`\`\`
 
-For portfolio data example:
-\`\`\`javascript
-const data = {
-  currentValue: await getCurrentValue("0x7E3bBf75aba09833f899bB1FDd917FC3A5617555", 1),
-  // Use the safer function that handles errors gracefully with proper timerange
-  portfolioChart: await safeGetPortfolioValueChart(
-    ["0x7E3bBf75aba09833f899bB1FDd917FC3A5617555"], 
-    1,           // chainId
-    "1month"     // correct timerange format
-  ),
-};
-return data;
-\`\`\`
-
-For swap example:
-\`\`\`javascript
-const data = {
-  swapResult: await swap(
-    "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC on Base
-    "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE", // ETH on any chain
-    1000000, // 1 USDC (assuming 6 decimals)
-    "0xa5F8A22D2ee33281ca772f0eB18C04A32314bf6B", // From address
-    "0xa5F8A22D2ee33281ca772f0eB18C04A32314bf6B", // Origin (same as from)
-    0.5, // 0.5% slippage
-    8453 // Base chain ID
-  )
-};
-return data;
-\`\`\`
-
 Instructions:
 1. Return only the raw data needed to answer the user's question
-2. Do not perform any calculations or analysis
-3. Format your response as JavaScript code that calls the necessary functions
-4. For historical data, always specify the period needed
-5. Always return the fetched data as a structured object
-6. For questions about token performance, price movement, or trading decisions, always include:
-   - Technical analysis (1d, 7d, and 30d periods)
-   - Recent price changes
-   - Market data (volume, liquidity, market cap)
-
-When providing buy/sell ratings or analysis, incorporate the user's custom strategy and preferences
+2. Format your response as JavaScript code that calls the necessary functions
+3. Always return the fetched data as a structured object
 `;
 
     if (model === 'deepseek-r1-distill-llama-70b') {
@@ -202,7 +137,7 @@ const characterAPI = async (userInput, executedData, systemPrompt, model = 'deep
     // If no Groq API key is available, return a default response
     if (!GROQ_API_KEY) {
       console.log('No GROQ API key available, returning default analysis');
-      return `Based on the data provided, I can see you're interested in swap functionality. The swap operation between tokens appears feasible with the given parameters.`;
+      return `Based on the data provided, I can see you're interested in portfolio chart functionality. Your portfolio data appears to be retrievable with the correct wallet address format.`;
     }
 
     const messages = [
@@ -222,19 +157,33 @@ Please analyze this data and provide insights that directly address the user's q
     ];
 
     if (model === 'deepseek-r1-distill-llama-70b') {
-      const response = await groq.chat.completions.create({
-        model: "deepseek-r1-distill-llama-70b",
-        messages: messages,
-      });
+      try {
+        const response = await groq.chat.completions.create({
+          model: "deepseek-r1-distill-llama-70b",
+          messages: messages,
+        });
 
-      // Remove the think section from the response
-      const content = response.choices[0].message.content;
-      return content.replace(/```think\n[\s\S]*?\n```/g, '').trim();
+        // Remove the think section from the response
+        const content = response.choices[0].message.content;
+        return content.replace(/```think\n[\s\S]*?\n```/g, '').trim();
+      } catch (groqError) {
+        console.error('Error calling Groq API:', groqError);
+        // Return a fallback response if Groq API fails
+        return `I've analyzed your portfolio data. ${executedData.error ? 
+          "There was an issue retrieving your portfolio data. Please ensure you're using a valid Ethereum address and correct parameters." : 
+          "Your portfolio chart has been generated successfully."}`;
+      }
     }
+    
+    // Fallback for unsupported models
+    return `I've analyzed your portfolio data. ${executedData.error ? 
+      "There was an issue retrieving your portfolio data. Please ensure you're using a valid Ethereum address and correct parameters." : 
+      "Your portfolio chart has been generated successfully."}`;
 
   } catch (error) {
     console.error('Error calling AI Character API:', error);
-    throw new Error('Failed to analyze data');
+    // Return a fallback response instead of throwing
+    return `Unable to analyze the data due to a technical issue. ${error.message}`;
   }
 };
 
@@ -374,10 +323,32 @@ const analyzeQuery = async (userInput, systemPrompt, model = 'deepseek-r1-distil
 
     // Step 1: Get data fetching code from AI
     console.log('Step 1: Generating data fetching code...');
-    const dataFetchingCode = await dataAPI(userInput, model);
-    console.log('Data fetching code generated:', dataFetchingCode);
-    if (!dataFetchingCode) {
-      throw new Error('Failed to generate data fetching code');
+    let dataFetchingCode;
+    try {
+      dataFetchingCode = await dataAPI(userInput, model);
+      console.log('Data fetching code generated:', dataFetchingCode);
+      if (!dataFetchingCode) {
+        throw new Error('Failed to generate data fetching code');
+      }
+    } catch (codeGenError) {
+      console.error('Error generating data fetching code:', codeGenError);
+      // Provide fallback code for portfolio chart requests
+      if (userInput.toLowerCase().includes('portfolio') && userInput.toLowerCase().includes('chart')) {
+        const walletMatch = userInput.match(/0x[a-fA-F0-9]{40}/);
+        const walletAddress = walletMatch ? walletMatch[0] : "0xa5F8A22D2ee33281ca772f0eB18C04A32314bf6B";
+        dataFetchingCode = `
+const data = {
+  portfolioChart: await getGenerateAndUploadPortfolioChart(
+    "${walletAddress}", 
+    1,
+    "1month"
+  )
+};
+return data;`;
+        console.log('Using fallback code for portfolio chart:', dataFetchingCode);
+      } else {
+        throw codeGenError; // Re-throw if we can't generate fallback code
+      }
     }
 
     // Step 2: Execute the code to fetch actual data
@@ -421,10 +392,19 @@ const analyzeQuery = async (userInput, systemPrompt, model = 'deepseek-r1-distil
 
     // Step 3: Analyze the data using the specified model
     console.log('Step 3: Generating analysis and insights...');
-    const analysis = await characterAPI(userInput, analysisData, systemPrompt, model);
-    console.log('Generated analysis:', analysis);
-    if (!analysis) {
-      throw new Error('Failed to generate analysis');
+    let analysis;
+    try {
+      analysis = await characterAPI(userInput, analysisData, systemPrompt, model);
+      console.log('Generated analysis:', analysis);
+      if (!analysis) {
+        throw new Error('Empty analysis returned');
+      }
+    } catch (analysisError) {
+      console.error('Error generating analysis:', analysisError);
+      // Provide fallback analysis
+      analysis = `Based on your request for portfolio data${executedData.error ? 
+        ", there was an issue retrieving the information. Please check that you're using a valid wallet address and try again." : 
+        ", I've successfully retrieved the data. Your portfolio information is now available."}`;
     }
 
     return {

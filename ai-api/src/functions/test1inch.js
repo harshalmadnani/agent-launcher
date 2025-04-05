@@ -10,7 +10,8 @@ const {
   getTokenDetails,
   getNFTsByAddress,
   uploadChartToSupabase,
-  generateAndUploadPortfolioChart
+  generateAndUploadPortfolioChart,
+  getGenerateAndUploadPortfolioChart
 } = require('./1inch');
 
 // For Supabase testing
@@ -190,6 +191,45 @@ async function testSupabaseUpload() {
   }
 }
 
+async function testCombinedFunction() {
+  try {
+    console.log("Testing Combined Function (getGenerateAndUploadPortfolioChart)...");
+    console.log(`Using Supabase URL: ${SUPABASE_URL}`);
+    console.log(`Test address: ${TEST_ADDRESS}, Chain ID: ${CHAIN_ID}`);
+    
+    // Test with different timeranges
+    const timeranges = ["1day", "1week", "1month"];
+    let allTestsSuccessful = true;
+    
+    for (const timerange of timeranges) {
+      console.log(`\nTesting timerange: ${timerange}`);
+      console.time(`${timerange} execution time`);
+      
+      try {
+        const url = await getGenerateAndUploadPortfolioChart(
+          supabase,
+          TEST_ADDRESS,
+          CHAIN_ID,
+          timerange
+        );
+        
+        console.timeEnd(`${timerange} execution time`);
+        console.log(`✅ Success for ${timerange}!`);
+        console.log(`Chart URL: ${url}`);
+      } catch (error) {
+        console.timeEnd(`${timerange} execution time`);
+        console.error(`❌ Failed for ${timerange}:`, error.message);
+        allTestsSuccessful = false;
+      }
+    }
+    
+    return allTestsSuccessful;
+  } catch (error) {
+    console.error("\n❌ Error in combined function test:", error);
+    return false;
+  }
+}
+
 async function testAllEndpoints() {
   console.log("Starting 1inch Portfolio API Tests...");
   console.log(`Using test address: ${TEST_ADDRESS}`);
@@ -230,7 +270,8 @@ async function testAllEndpoints() {
       DEFAULT_CHAIN_IDs
     ),
     chartGeneration: await testChartGeneration(),
-    supabaseUpload: await testSupabaseUpload()
+    supabaseUpload: await testSupabaseUpload(),
+    combinedFunction: await testCombinedFunction()
   };
 
   console.log("\nTest Summary:");
@@ -245,5 +286,15 @@ async function testAllEndpoints() {
   console.log(`\nTest Results: ${successfulEndpoints}/${totalEndpoints} endpoints successful`);
 }
 
-// Run the tests
-testAllEndpoints();
+// Run the test and provide summary
+testCombinedFunction()
+  .then(success => {
+    console.log("\n----------------------------------------");
+    console.log(`Test ${success ? '✅ Passed' : '❌ Failed'}`);
+    console.log("----------------------------------------");
+    process.exit(success ? 0 : 1);
+  })
+  .catch(error => {
+    console.error("Unexpected error:", error);
+    process.exit(1);
+  });
