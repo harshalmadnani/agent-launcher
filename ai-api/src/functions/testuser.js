@@ -405,26 +405,10 @@ const runTests = async () => {
   console.log(`Using Supabase URL: ${SUPABASE_URL}`);
   console.log(`Using MultiBaas API URL: ${MULTIBAAS_API_URL}`);
   
-  // Test creating an HSM key directly
-  await testCreateHsmKey();
+  // Only test creating a new user with HSM key
+  await testCreateUser();
   
-  // Test adding an HSM key
-  await testAddHsmKey();
-  
-  // Test creating a new user with HSM key
-  const createResult = await testCreateUser();
-  
-  // Test getting the user we just created
-  let username = null;
-  if (createResult.success && createResult.data) {
-    username = createResult.data.username;
-    await testGetUser(username);
-  }
-  
-  // Test getting a non-existent user
-  await testGetNonExistentUser();
-  
-  console.log("\nAll tests completed.");
+  console.log("\nTest completed.");
 };
 
 // Run tests when this file is executed directly

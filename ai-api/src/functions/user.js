@@ -324,10 +324,174 @@ const getAddressFromUsername = async (username) => {
   }
 };
 
+
+const createUser = async (username, userData = {}) => {
+  try {
+    console.log(`Starting createUser process for username: ${username}`);
+    
+    // Step 1: Create user with username
+    console.log('Step 1: Creating user with username');
+    const userResult = await createUserWithUsername(username, userData);
+    
+    if (!userResult.success) {
+      throw new Error(`Failed to create user: ${userResult.error}`);
+    }
+    
+    console.log('User created successfully, waiting 10 seconds...');
+    await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
+    
+    // Step 2: Create HSM key using the formatted username
+    const userId = userResult.data.id;
+    const formattedUsername = userResult.data.username;
+    const keyName = formattedUsername;
+    
+    console.log(`Step 2: Creating HSM key for user: ${formattedUsername}`);
+    const hsmKeyResult = await createHsmKey(keyName);
+    
+    if (!hsmKeyResult.success) {
+      throw new Error(`Failed to create HSM key: ${hsmKeyResult.error}`);
+    }
+    
+    console.log('HSM key created successfully, waiting 10 seconds...');
+    await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
+    
+    // Step 3: Add HSM key to the system
+    if (hsmKeyResult.data && 
+        hsmKeyResult.data.result && 
+        hsmKeyResult.data.result.keyName && 
+        hsmKeyResult.data.result.keyVersion) {
+      
+      const { keyName, keyVersion } = hsmKeyResult.data.result;
+      console.log(`Step 3: Adding HSM key to system with keyName: ${keyName}, keyVersion: ${keyVersion}`);
+      
+      const addKeyResult = await addHsmKey(keyName, keyVersion);
+      if (!addKeyResult.success) {
+        throw new Error(`Failed to add HSM key: ${addKeyResult.error}`);
+      }
+      
+      console.log('HSM key added successfully');
+      
+      // Update the user record with address and HSM key data
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+      
+      const updateFields = { 
+        hsm_key_data: hsmKeyResult.data,
+        key_added: true
+      };
+      
+      // If publicAddress is available in HSM response, use it
+      if (hsmKeyResult.data.result && hsmKeyResult.data.result.publicAddress) {
+        const publicAddress = hsmKeyResult.data.result.publicAddress;
+        console.log(`Updating user with address: ${publicAddress}`);
+        updateFields.address = publicAddress;
+      }
+      
+      const { data: updateData, error: updateError } = await supabase
+        .from('users2')
+        .update(updateFields)
+        .eq('id', userId)
+        .select();
+      
+      if (updateError) {
+        console.error(`Error updating user with HSM data: ${updateError.message}`);
+      } else {
+        console.log(`Successfully updated user with HSM data and key_added status`);
+      }
+      
+      return {
+        success: true,
+        data: updateData?.[0] || userResult.data,
+        hsmKeyResult,
+        addKeyResult
+      };
+    } else {
+      throw new Error('Invalid HSM key data received');
+    }
+    
+  } catch (error) {
+    console.error('Error in createUser:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
+const getOrCreateUserAddress = async (username) => {
+  try {
+    console.log(`Checking if user exists: ${username}`);
+    
+    // Check if the user exists at all first
+    const userResult = await getUserByUsername(username);
+    const userExists = userResult.success;
+    
+    // Then check if we have an address for the user
+    const addressResult = await getAddressFromUsername(username);
+    
+    // If user exists and has an address, return the address
+    if (addressResult.success) {
+      console.log(`User ${username} already exists with address: ${addressResult.address}`);
+      return addressResult;
+    }
+    
+    // If user exists but doesn't have an address, don't try to create again
+    if (userExists) {
+      console.log(`User ${username} exists but doesn't have an address yet.`);
+      return {
+        success: false,
+        error: 'User exists but does not have an address yet'
+      };
+    }
+    
+    console.log(`User ${username} does not exist, creating new user...`);
+    
+    // Create user if not exists
+    const createResult = await createUser(username);
+    
+    if (!createResult.success) {
+      throw new Error(`Failed to create user: ${createResult.error}`);
+    }
+    
+    // Get the actual username that was created (might have been reformatted)
+    const createdUsername = createResult.data.username;
+    console.log(`User created successfully with assigned username: ${createdUsername}`);
+    console.log(`Waiting 5 seconds...`);
+    await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+    
+    // Use the created username to get the address
+    console.log(`Getting address for newly created user: ${createdUsername}`);
+    const newAddressResult = await getAddressFromUsername(createdUsername);
+    
+    if (!newAddressResult.success) {
+      // If we can't get the address but we know the user was created with an address,
+      // let's return that address from the create result
+      if (createResult.data && createResult.data.address) {
+        console.log(`Using address from create response: ${createResult.data.address}`);
+        return {
+          success: true,
+          address: createResult.data.address
+        };
+      }
+      
+      throw new Error(`Failed to get address for newly created user: ${newAddressResult.error}`);
+    }
+    
+    return newAddressResult;
+  } catch (error) {
+    console.error('Error in getOrCreateUserAddress:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
+
 module.exports = {
   createUserWithUsername,
   getUserByUsername,
   createHsmKey,
   addHsmKey,
-  getAddressFromUsername
+  getAddressFromUsername,
+  createUser,
+  getOrCreateUserAddress
 };
