@@ -1,7 +1,27 @@
 import React from 'react';
 import './Navbar.css';
+import { usePrivy } from '@privy-io/react-auth';
 
 const Navbar = () => {
+  const { login, logout, authenticated, user, ready } = usePrivy();
+
+  // Get display name from any available user identifier
+  const getUserDisplayName = () => {
+    if (!user) return 'User';
+    
+    // Check various user identifiers in priority order
+    if (user.email?.address) return user.email.address;
+    if (user.google?.email) return user.google.email;
+    if (user.discord?.username) return user.discord.username;
+    if (user.wallet?.address) {
+      // Format wallet address to show first 6 and last 4 characters
+      const addr = user.wallet.address;
+      return `${addr.substring(0, 6)}...${addr.substring(addr.length - 4)}`;
+    }
+    
+    return 'User';
+  };
+
   return (
     <nav className="navbar">
       <ul className="nav-list">
@@ -22,6 +42,22 @@ const Navbar = () => {
           </button>
         </li>
       </ul>
+      <div className="auth-section">
+        {!ready ? (
+          <div className="loading-state">Loading...</div>
+        ) : authenticated ? (
+          <div className="user-info">
+            <span className="user-email">{getUserDisplayName()}</span>
+            <button className="auth-button logout" onClick={logout}>
+              Logout
+            </button>
+          </div>
+        ) : (
+          <button className="auth-button login" onClick={login}>
+            Login
+          </button>
+        )}
+      </div>
     </nav>
   );
 };
