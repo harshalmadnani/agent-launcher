@@ -2,6 +2,8 @@ const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
 const { Scraper} = require('twitter-agent');
 const fs = require('fs');
+const path = require('path');
+const fetch = require('node-fetch');
 require('dotenv').config();
 
 const app = express();
@@ -109,9 +111,113 @@ async function getUserWalletAddress(username) {
   }
 }
 
+// Function to extract image URLs from tweet content
+function extractImageUrl(text) {
+  if (!text) return null;
+  
+  // Regular expression to match Supabase URL patterns
+  const supabaseUrlRegex = /(https?:\/\/\S+\.supabase\.\S+\/storage\/v\S+\.(jpg|jpeg|png|gif|webp)(\?\S*)?)/i;
+  const supabaseMatch = text.match(supabaseUrlRegex);
+  if (supabaseMatch) {
+    console.log('Found Supabase image URL:', supabaseMatch[0]);
+    return supabaseMatch[0];
+  }
+  
+  // General image URL pattern as fallback
+  const generalImageRegex = /(https?:\/\/\S+\.(jpg|jpeg|png|gif|webp)(\?\S*)?)/i;
+  const generalMatch = text.match(generalImageRegex);
+  if (generalMatch) {
+    console.log('Found general image URL:', generalMatch[0]);
+    return generalMatch[0];
+  }
+  
+  console.log('No image URLs found in text');
+  return null;
+}
+
+// Function to download image from URL
+async function downloadImage(url) {
+  try {
+    console.log(`Downloading image from ${url}`);
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.status} ${response.statusText}`);
+    }
+    
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.startsWith('image/')) {
+      throw new Error(`URL does not point to an image: ${contentType}`);
+    }
+    
+    const buffer = await response.buffer();
+    
+    // Create a temp directory if it doesn't exist
+    const tempDir = path.join(__dirname, 'temp');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir);
+    }
+    
+    // Generate a unique filename
+    const filename = path.join(tempDir, `image_${Date.now()}.${contentType.split('/')[1]}`);
+    
+    // Save the file
+    fs.writeFileSync(filename, buffer);
+    console.log(`Image saved to ${filename}`);
+    
+    return {
+      path: filename,
+      data: buffer,
+      mediaType: contentType
+    };
+  } catch (error) {
+    console.error('Error downloading image:', error);
+    return null;
+  }
+}
+
+// Function to clean up temporary image files
+function cleanupTempImages() {
+  try {
+    const tempDir = path.join(__dirname, 'temp');
+    if (!fs.existsSync(tempDir)) {
+      return;
+    }
+    
+    // Read all files in the temp directory
+    const files = fs.readdirSync(tempDir);
+    const now = Date.now();
+    const ONE_HOUR = 60 * 60 * 1000; // 1 hour in milliseconds
+    
+    // Remove files older than 1 hour
+    files.forEach(file => {
+      const filePath = path.join(tempDir, file);
+      const stats = fs.statSync(filePath);
+      const fileAge = now - stats.mtime.getTime();
+      
+      // If file is older than 1 hour, delete it
+      if (fileAge > ONE_HOUR) {
+        fs.unlinkSync(filePath);
+        console.log(`Removed old temp file: ${filePath}`);
+      }
+    });
+  } catch (error) {
+    console.error('Error cleaning up temp images:', error);
+  }
+}
+
+// Function to clean tweet content by removing the image URL
+function cleanTweetContent(content, imageUrl) {
+  if (!content || !imageUrl) return content;
+  
+  // Remove the URL from the tweet content
+  return content.replace(imageUrl, '').trim();
+}
+
 // Function to post tweet using twitter-agent with cookie-based authentication
 async function postTweet(twitterCredentials, tweetContent) {
   let scraper = null;
+  let tempImagePath = null;
   
   try {
     if (!twitterCredentials) {
@@ -133,21 +239,56 @@ async function postTweet(twitterCredentials, tweetContent) {
 
     scraper = await setupScraper(twitterCredentials);
     
+    // Check if tweet contains an image URL
+    let mediaData = null;
+    const imageUrl = extractImageUrl(tweetContent);
+    let cleanedContent = tweetContent;
+    
+    if (imageUrl) {
+      console.log('Found image URL in tweet content:', imageUrl);
+      
+      // Download the image
+      const imageData = await downloadImage(imageUrl);
+      
+      if (imageData) {
+        // Store temp image path for cleanup
+        tempImagePath = imageData.path;
+        
+        // Clean the tweet content by removing the image URL
+        cleanedContent = cleanTweetContent(tweetContent, imageUrl);
+        
+        // Prepare media data for twitter-agent
+        mediaData = [{
+          data: imageData.data,
+          mediaType: imageData.mediaType
+        }];
+        
+        console.log('Prepared media data for tweet');
+      }
+    }
+    
     // Split content into thread if it contains blank lines
-    const tweets = tweetContent.split('\n\n').filter(tweet => tweet.trim());
+    const tweets = cleanedContent.split('\n\n').filter(tweet => tweet.trim());
     
     if (tweets.length > 1) {
       console.log(`Creating thread with ${tweets.length} tweets`);
-      await createThread(scraper, tweets);
+      // Only attach media to the first tweet in a thread
+      await createThread(scraper, tweets, mediaData);
     } else {
       // Single tweet case
       console.log('Sending single tweet with content:', tweets[0]);
-      await scraper.sendTweet(tweets[0]);
+      await scraper.sendTweet(tweets[0], undefined, mediaData);
     }
 
     // Close browser after tweet is sent
     if (scraper?.close) {
       await scraper.close();
+    }
+
+    // Clean up temporary image file if it exists
+    if (tempImagePath && fs.existsSync(tempImagePath)) {
+      fs.unlinkSync(tempImagePath);
+      console.log(`Deleted temporary image file: ${tempImagePath}`);
     }
 
     console.log('Tweet(s) posted successfully!');
@@ -173,20 +314,30 @@ async function postTweet(twitterCredentials, tweetContent) {
       console.error('Error closing browser after tweet failure:', closeError);
     }
     
+    // Clean up temporary image file even if tweet failed
+    if (tempImagePath && fs.existsSync(tempImagePath)) {
+      fs.unlinkSync(tempImagePath);
+      console.log(`Deleted temporary image file after error: ${tempImagePath}`);
+    }
+    
     return false;
   }
 }
 
-// Add createThread function
-async function createThread(scraper, threadContent, options = {}) {
+// Add createThread function with media support
+async function createThread(scraper, threadContent, mediaData = null, options = {}) {
   const { delayBetweenTweets = 3000, indexingDelay = 10000 } = options;
   let previousTweetId = null;
 
   for (let i = 0; i < threadContent.length; i++) {
     const tweetText = threadContent[i];
+    // Only include media with the first tweet
+    const tweetMedia = i === 0 ? mediaData : null;
+    
     const tweetResult = await scraper.sendTweet(
       tweetText,
       i === 0 ? null : previousTweetId,
+      tweetMedia
     );
 
     try {
@@ -429,11 +580,12 @@ async function generateMentionReply(tweet) {
     const analysis = await getAIAnalysis(tweet.text || '', tweet.username);
     
     if (analysis) {
+      let replyText = analysis;
       // Ensure the reply starts with the username mention
-      if (!analysis.startsWith(`@${tweet.username}`)) {
-        return `@${tweet.username} ${analysis}`;
+      if (!replyText.startsWith(`@${tweet.username}`)) {
+        replyText = `@${tweet.username} ${replyText}`;
       }
-      return analysis;
+      return replyText;
     }
     
     // Fallback to default responses if AI analysis fails
@@ -567,9 +719,44 @@ async function replyToMentions(scraper, credentials, maxMentions = 10, delayMs =
         const customReplyText = await generateMentionReply(tweet);
         console.log(`Generated reply: "${customReplyText}"`);
         
-        // Use sendTweet instead of tweet
-        await scraper.sendTweet(customReplyText, tweet.id);
+        // Check if reply contains an image URL
+        let mediaData = null;
+        let tempImagePath = null;
+        const imageUrl = extractImageUrl(customReplyText);
+        let cleanedReplyText = customReplyText;
+        
+        if (imageUrl) {
+          console.log('Found image URL in reply:', imageUrl);
+          
+          // Download the image
+          const imageData = await downloadImage(imageUrl);
+          
+          if (imageData) {
+            // Store temp image path for cleanup
+            tempImagePath = imageData.path;
+            
+            // Clean the reply text by removing the image URL
+            cleanedReplyText = cleanTweetContent(customReplyText, imageUrl);
+            
+            // Prepare media data for twitter-agent
+            mediaData = [{
+              data: imageData.data,
+              mediaType: imageData.mediaType
+            }];
+            
+            console.log('Prepared media data for reply');
+          }
+        }
+        
+        // Use sendTweet with media if available
+        await scraper.sendTweet(cleanedReplyText, tweet.id, mediaData);
         console.log('✨ Reply sent successfully');
+        
+        // Clean up temporary image file if it exists
+        if (tempImagePath && fs.existsSync(tempImagePath)) {
+          fs.unlinkSync(tempImagePath);
+          console.log(`Deleted temporary image file: ${tempImagePath}`);
+        }
         
         if (mentions.indexOf(tweet) < mentions.length - 1) {
           console.log(`⏳ Waiting ${delayMs}ms before next reply...`);
@@ -589,7 +776,7 @@ async function replyToMentions(scraper, credentials, maxMentions = 10, delayMs =
   }
 }
 
-// Function to handle replies to your tweets
+// Update handleTweetReplies to handle image replies
 async function handleTweetReplies(scraper, credentials, maxTweets = 20, delayMs = 2000, intervalMinutes = 30) {
   try {
     const myUsername = credentials.username;
@@ -672,8 +859,43 @@ async function handleTweetReplies(scraper, credentials, maxTweets = 20, delayMs 
           const customReplyText = await generateMentionReply(reply);
           console.log(`  Generated response: "${customReplyText}"`);
 
-          await scraper.sendTweet(customReplyText, reply.id);
+          // Check if reply contains an image URL
+          let mediaData = null;
+          let tempImagePath = null;
+          const imageUrl = extractImageUrl(customReplyText);
+          let cleanedReplyText = customReplyText;
+          
+          if (imageUrl) {
+            console.log('  Found image URL in reply:', imageUrl);
+            
+            // Download the image
+            const imageData = await downloadImage(imageUrl);
+            
+            if (imageData) {
+              // Store temp image path for cleanup
+              tempImagePath = imageData.path;
+              
+              // Clean the reply text by removing the image URL
+              cleanedReplyText = cleanTweetContent(customReplyText, imageUrl);
+              
+              // Prepare media data for twitter-agent
+              mediaData = [{
+                data: imageData.data,
+                mediaType: imageData.mediaType
+              }];
+              
+              console.log('  Prepared media data for reply');
+            }
+          }
+
+          await scraper.sendTweet(cleanedReplyText, reply.id, mediaData);
           console.log(`  ✨ Reply sent successfully`);
+          
+          // Clean up temporary image file if it exists
+          if (tempImagePath && fs.existsSync(tempImagePath)) {
+            fs.unlinkSync(tempImagePath);
+            console.log(`  Deleted temporary image file: ${tempImagePath}`);
+          }
 
           // Add delay between replies
           await new Promise(resolve => setTimeout(resolve, delayMs));
@@ -709,7 +931,7 @@ async function hasAlreadyReplied(scraper, tweetId, myUsername) {
   }
 }
 
-// Update setupRealtimeSubscription to include target user tweet checks
+// Update setupRealtimeSubscription target user tweet handling
 async function setupRealtimeSubscription() {
   const terminal2 = supabase
     .channel('custom-channel')
@@ -830,8 +1052,43 @@ async function setupRealtimeSubscription() {
                   const customReplyText = await generateMentionReply(tweet);
                   console.log(`Replying to @${tweet.username}'s tweet: "${customReplyText}"`);
 
-                  await scraper.sendTweet(customReplyText, tweet.id);
+                  // Check if reply contains an image URL
+                  let mediaData = null;
+                  let tempImagePath = null;
+                  const imageUrl = extractImageUrl(customReplyText);
+                  let cleanedReplyText = customReplyText;
+                  
+                  if (imageUrl) {
+                    console.log('Found image URL in reply:', imageUrl);
+                    
+                    // Download the image
+                    const imageData = await downloadImage(imageUrl);
+                    
+                    if (imageData) {
+                      // Store temp image path for cleanup
+                      tempImagePath = imageData.path;
+                      
+                      // Clean the reply text by removing the image URL
+                      cleanedReplyText = cleanTweetContent(customReplyText, imageUrl);
+                      
+                      // Prepare media data for twitter-agent
+                      mediaData = [{
+                        data: imageData.data,
+                        mediaType: imageData.mediaType
+                      }];
+                      
+                      console.log('Prepared media data for reply');
+                    }
+                  }
+
+                  await scraper.sendTweet(cleanedReplyText, tweet.id, mediaData);
                   console.log('Reply sent successfully');
+                  
+                  // Clean up temporary image file if it exists
+                  if (tempImagePath && fs.existsSync(tempImagePath)) {
+                    fs.unlinkSync(tempImagePath);
+                    console.log(`Deleted temporary image file: ${tempImagePath}`);
+                  }
 
                   // Add delay between replies
                   await new Promise(resolve => setTimeout(resolve, 3000));
@@ -929,6 +1186,9 @@ app.listen(port, async () => {
     console.log(`Server running on port ${port}`);
     await setupRealtimeSubscription();
     console.log('Realtime subscription setup complete');
+    
+    // Set up periodic cleanup of temp images (every hour)
+    setInterval(cleanupTempImages, 60 * 60 * 1000);
   } catch (error) {
     console.error('Error during server startup:', error);
   }
