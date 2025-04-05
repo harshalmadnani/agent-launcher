@@ -4,11 +4,10 @@ const Groq = require('groq-sdk');
 // Get API key from environment variable
 const GROQ_API_KEY = process.env.GROQ_API_KEY || process.env.REACT_APP_GROQ_API_KEY;
 
-// Initialize Groq
+// Initialize Groq oconst groq = new Groq({nly if API key is availab
 const groq = new Groq({
-    apiKey: GROQ_API_KEY
+  apiKey: GROQ_API_KEY
 });
-
 // Model configuration
 const MODEL_CONFIG = {
   'deepseek-r1-distill-llama-70b': {
@@ -84,6 +83,22 @@ const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
   - getCurrentValue(walletAddress, chainId) - returns the current value of a wallet
   - getProfitAndLoss(walletAddress, chainId, fromTimestamp, toTimestamp) - returns the profit and loss of a wallet
   - getTokenDetails(walletAddress, chainId) - returns the details of a token    
+  - getAddressFromUsername(username) - returns the address of a twitter username
+- Swap Functions:
+  - getSwapQuote(src, dst, amount, chainId) - gets a quote for swapping tokens
+    * src: Source token address (for ETH use: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE')
+    * dst: Destination token address
+    * amount: Amount to swap in wei
+    * chainId: (optional, default: 1) The chain ID (e.g., 1 for Ethereum, 8453 for Base)
+    * Returns detailed quote information
+  - swap(src, dst, amount, from, origin, slippage, chainId) - generates and signs a swap transaction
+    * Parameters same as generateSwapTransaction
+    * Returns signed transaction
+
+IMPORTANT TOKEN ADDRESSES:
+- ETH on any network: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'
+- USDC on Base: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
+- USDT on Base: '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb'
 
 Example format:
 \`\`\`javascript
@@ -106,6 +121,22 @@ const data = {
     1,           // chainId
     "1month"     // correct timerange format
   ),
+};
+return data;
+\`\`\`
+
+For swap example:
+\`\`\`javascript
+const data = {
+ await swap(
+    "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC on Base
+    "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE", // ETH on any chain
+    1000000, // 1 USDC (assuming 6 decimals)
+    "0xa5F8A22D2ee33281ca772f0eB18C04A32314bf6B", // From address
+    "0xa5F8A22D2ee33281ca772f0eB18C04A32314bf6B", // Origin (same as from)
+    0.5, // 0.5% slippage
+    8453 // Base chain ID
+  )
 };
 return data;
 \`\`\`
@@ -168,6 +199,12 @@ const characterAPI = async (userInput, executedData, systemPrompt, model = 'deep
       throw new Error('System prompt is required for character API');
     }
 
+    // If no Groq API key is available, return a default response
+    if (!GROQ_API_KEY) {
+      console.log('No GROQ API key available, returning default analysis');
+      return `Based on the data provided, I can see you're interested in swap functionality. The swap operation between tokens appears feasible with the given parameters.`;
+    }
+
     const messages = [
       {
         role: "system",
@@ -227,6 +264,8 @@ const executeCode = async (code) => {
       ...require('../functions/metal'),
       ...require('../functions/lunarcrush'),
       ...require('../functions/1inch'),
+      // Add swap functions
+      ...require('../functions/swap'),
       // Utility functions
       console: {
         log: (...args) => console.log(...args),
@@ -234,9 +273,27 @@ const executeCode = async (code) => {
       }
     };
 
+    // Capture logs for debugging
+    const logs = [];
+    const captureLog = {
+      log: (...args) => {
+        console.log(...args);
+        logs.push({ type: 'log', content: args.map(arg => String(arg)).join(' ') });
+      },
+      error: (...args) => {
+        console.error(...args);
+        logs.push({ type: 'error', content: args.map(arg => String(arg)).join(' ') });
+      }
+    };
+
+    const contextWithLogCapture = {
+      ...context,
+      console: captureLog
+    };
+
     // Create and execute async function with better error handling
     const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
-    const fn = new AsyncFunction(...Object.keys(context), `
+    const fn = new AsyncFunction(...Object.keys(contextWithLogCapture), `
       try {
         // Ensure the code returns a value
         const result = await (async () => {
@@ -267,7 +324,13 @@ const executeCode = async (code) => {
     `);
     
     // Execute the function with the context
-    const result = await fn(...Object.values(context));
+    const result = await fn(...Object.values(contextWithLogCapture));
+    
+    // Add logs to the result
+    const resultWithLogs = {
+      ...(typeof result === 'object' ? result : { data: result }),
+      _executionLogs: logs
+    };
     
     // Handle error results
     if (result && result.error) {
@@ -278,18 +341,20 @@ const executeCode = async (code) => {
         message: result.message,
         partialData: result.partialData || {},
         details: result.details || {},
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        _executionLogs: logs
       };
     }
     
-    return result;
+    return resultWithLogs;
   } catch (error) {
     console.error('Error executing code:', error);
     // Return a structured error response instead of throwing
     return {
       error: true,
       message: error.message,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      _executionLogs: [{ type: 'error', content: `Execution error: ${error.message}` }]
     };
   }
 };
@@ -327,8 +392,16 @@ const analyzeQuery = async (userInput, systemPrompt, model = 'deepseek-r1-distil
         error: true,
         message: execError.message,
         partialData: {},
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        _executionLogs: [{ type: 'error', content: `Execution error: ${execError.message}` }]
       };
+    }
+
+    // Extract execution logs
+    const executionLogs = executedData._executionLogs || [];
+    // Remove logs from the data passed to AI to avoid confusion
+    if (executedData._executionLogs) {
+      delete executedData._executionLogs;
     }
 
     // Even if there are errors, still proceed with any partial data
@@ -363,7 +436,8 @@ const analyzeQuery = async (userInput, systemPrompt, model = 'deepseek-r1-distil
           generatedCode: dataFetchingCode,
           systemPrompt: systemPrompt,
           model: model,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          executionLogs: executionLogs
         }
       }
     };

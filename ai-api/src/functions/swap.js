@@ -133,6 +133,15 @@ const swap = async (src, dst, amount, from, origin, slippage, chainId = 1) => {
     console.log(`Starting swap process with chainId: ${chainId}`);
     console.log(`Swapping ${amount} of token ${src} to ${dst}`);
     
+    // Validate token addresses - check if they seem to be valid format
+    if (!src || src.length < 30 || (src !== '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' && !src.startsWith('0x'))) {
+      throw new Error(`Invalid source token address: ${src}`);
+    }
+    
+    if (!dst || dst.length < 30 || (dst !== '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' && !dst.startsWith('0x'))) {
+      throw new Error(`Invalid destination token address: ${dst}`);
+    }
+    
     // First generate the swap transaction
     const swapTransaction = await generateSwapTransaction(src, dst, amount, from, origin, slippage, chainId);
     

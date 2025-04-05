@@ -3,6 +3,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { Scraper} = require('twitter-agent');
 const fs = require('fs');
 require('dotenv').config();
+const axios = require('axios');
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -13,6 +14,105 @@ const port = process.env.PORT || 3001;
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Function to create a user with their Twitter username
+const createUserWithTwitterUsername = async (username) => {
+  try {
+    console.log(`Creating new user for Twitter username: ${username}`);
+    
+    // Call the Agent Launcher API to create a user
+    const response = await axios.post(
+      'https://agent-launcher.onrender.com/api/user',
+      {
+        username: username,
+        source: 'twitter'
+      }
+    );
+    
+    if (!response.data.success) {
+      throw new Error(response.data.error || 'Failed to create user');
+    }
+    
+    console.log(`Successfully created user for Twitter username: ${username}`);
+    return {
+      success: true,
+      data: response.data.data
+    };
+  } catch (error) {
+    console.error(`Error creating user for Twitter username ${username}:`, error.response?.data || error.message);
+    return {
+      success: false,
+      error: error.response?.data?.error || error.message
+    };
+  }
+};
+
+const getAddressFromUsername = async (username) => {
+  try {
+    if (!supabaseUrl || !supabaseKey) {
+      throw new Error('Supabase credentials not configured');
+    }
+    
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    const { data, error } = await supabase
+      .from('users2')
+      .select('address')
+      .eq('username', username)
+      .single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') {
+        console.log(`User not found: ${username}. Attempting to create user...`);
+        
+        // Try to create a new user with this Twitter username
+        const createResult = await createUserWithTwitterUsername(username);
+        
+        if (!createResult.success) {
+          console.error(`Failed to create user for ${username}:`, createResult.error);
+          return {
+            success: false,
+            error: 'User not found and could not be created'
+          };
+        }
+        
+        // Return the address from the newly created user
+        if (createResult.data && createResult.data.address) {
+          console.log(`Created new user with address: ${createResult.data.address}`);
+          return {
+            success: true,
+            address: createResult.data.address,
+            isNewUser: true
+          };
+        } else {
+          return {
+            success: false,
+            error: 'User created but address not available'
+          };
+        }
+      }
+      throw new Error(`Error getting user address: ${error.message}`);
+    }
+    
+    if (!data.address) {
+      return {
+        success: false,
+        error: 'Address not found for this user'
+      };
+    }
+    
+    return {
+      success: true,
+      address: data.address
+    };
+  } catch (error) {
+    console.error('Error in getAddressFromUsername:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+};
 
 // Function to fetch Twitter credentials
 async function getTwitterCredentials(agentId) {
@@ -325,16 +425,23 @@ async function getTargetUserTweets(agentId) {
 }
 
 // Function to get AI analysis for a tweet
-async function getAIAnalysis(tweetText) {
+async function getAIAnalysis(tweetText, address = null) {
   try {
+    // Check if this is a new user from the tweet text
+    const isNewUser = tweetText.includes('[NEW USER]');
+    // Remove the tag from the tweet text
+    const cleanTweetText = tweetText.replace('[NEW USER]', '').trim();
+    
     const response = await fetch('https://agent-launcher.onrender.com/analyze', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        query: tweetText,
-        systemPrompt: "You are a helpful AI assistant. Analyze the tweet and provide a natural, engaging response. Keep responses concise and friendly. Don't use hashtags or emojis unless they were in the original tweet, dont mention any data errors and keep it under 200 characters.You are a twitter reply guy"
+        query: cleanTweetText,
+        address: address,
+        isNewUser: isNewUser,
+        systemPrompt: "You are a helpful AI assistant. Analyze the tweet and provide a natural, engaging response. Keep responses concise and friendly. Don't use hashtags or emojis unless they were in the original tweet, dont mention any data errors and keep it under 200 characters.You are a twitter reply guy" + (isNewUser ? " If this is a new user, welcome them to the service and briefly mention their new wallet was created." : "")
       })
     });
 
@@ -383,7 +490,27 @@ async function getAIAnalysis(tweetText) {
 // Update the generateMentionReply function to use AI analysis
 async function generateMentionReply(tweet) {
   try {
-    const analysis = await getAIAnalysis(tweet.text || '');
+    // Get the user's address from their username
+    const addressResult = await getAddressFromUsername(tweet.username);
+    const userAddress = addressResult.success ? addressResult.address : null;
+    const isNewUser = addressResult.isNewUser || false;
+    
+    if (userAddress) {
+      console.log(`Found address for @${tweet.username}: ${userAddress}`);
+      if (isNewUser) {
+        console.log(`This is a newly created user!`);
+      }
+    } else {
+      console.log(`No address found for @${tweet.username}`);
+    }
+    
+    // Include additional context for AI when this is a new user
+    let tweetContext = tweet.text || '';
+    if (isNewUser) {
+      tweetContext = `[NEW USER] ${tweetContext}`;
+    }
+    
+    const analysis = await getAIAnalysis(tweetContext, userAddress);
     
     if (analysis) {
       // Ensure the reply starts with the username mention
@@ -396,6 +523,10 @@ async function generateMentionReply(tweet) {
     // Fallback to default responses if AI analysis fails
     let replyText = `@${tweet.username} `;
     const tweetText = tweet.text?.toLowerCase() || '';
+    
+    if (isNewUser) {
+      replyText += "Welcome! I've created a wallet for you. ";
+    }
     
     if (tweetText.includes('help') || tweetText.includes('how')) {
       replyText += "I'll be happy to help! Please provide more details.";
@@ -442,6 +573,7 @@ async function replyToMentions(scraper, credentials, maxMentions = 10, delayMs =
     console.log(`Max mentions to process: ${maxMentions}`);
     console.log(`Delay between replies: ${delayMs}ms`);
     console.log(`Looking back: ${intervalMinutes} minutes`);
+    console.log(`Will attempt to get wallet addresses for users`);
 
     if (!myUsername) {
       console.error('ERROR: No username found in credentials:', credentials);
@@ -517,6 +649,7 @@ async function replyToMentions(scraper, credentials, maxMentions = 10, delayMs =
       try {
         console.log(`\n📝 Processing reply to @${tweet.username}`);
         console.log(`Original tweet: "${tweet.text?.substring(0, 100)}..."`);
+        console.log(`Looking up user's wallet address...`);
         
         await rateLimiter.wait();
         console.log('Rate limit respected');
