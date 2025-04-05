@@ -16,6 +16,67 @@ const isChromeExtensionError = (error) => {
   );
 };
 
+// Enhanced function to extract and clean up image URLs from text
+const extractImageUrl = (text) => {
+  if (!text) return null;
+  
+  console.log('Analyzing text for image URLs');
+  
+  // Try to extract URL from markdown image syntax ![alt](url)
+  const markdownImageRegex = /!\[.*?\]\((https?:\/\/\S+\.(jpg|jpeg|png|gif|webp)(\?\S*)?)\)/i;
+  const markdownMatch = text.match(markdownImageRegex);
+  if (markdownMatch && markdownMatch[1]) {
+    console.log('Found markdown image URL:', markdownMatch[1]);
+    return markdownMatch[1];
+  }
+
+  // Regular expression to match Supabase URL patterns
+  const supabaseUrlRegex = /(https?:\/\/\S+\.supabase\.\S+\/storage\/v\S+\.(jpg|jpeg|png|gif|webp)(\?\S*)?)/i;
+  const supabaseMatch = text.match(supabaseUrlRegex);
+  if (supabaseMatch) {
+    console.log('Found Supabase image URL:', supabaseMatch[0]);
+    return supabaseMatch[0];
+  }
+  
+  // General image URL pattern as fallback
+  const generalImageRegex = /(https?:\/\/\S+\.(jpg|jpeg|png|gif|webp)(\?\S*)?)/i;
+  const generalMatch = text.match(generalImageRegex);
+  if (generalMatch) {
+    console.log('Found general image URL:', generalMatch[0]);
+    return generalMatch[0];
+  }
+  
+  console.log('No image URLs found in text');
+  return null;
+};
+
+// Test if an image URL is valid and accessible
+const testImageUrl = (url) => {
+  return new Promise((resolve) => {
+    if (!url) {
+      resolve(false);
+      return;
+    }
+    
+    console.log('Testing image URL:', url);
+    const img = new Image();
+    
+    img.onload = () => {
+      console.log('Image URL is valid and loadable:', url);
+      resolve(true);
+    };
+    
+    img.onerror = () => {
+      console.log('Image URL failed to load:', url);
+      resolve(false);
+    };
+    
+    img.src = url;
+    // Set a timeout in case the image takes too long to load
+    setTimeout(() => resolve(false), 5000);
+  });
+};
+
 const ChatInterface = () => {
   const [inputValue, setInputValue] = useState('');
   const [isWelcomeScreen, setIsWelcomeScreen] = useState(true);
@@ -125,7 +186,7 @@ const ChatInterface = () => {
         },
         body: JSON.stringify({
           query: userQuery,
-          systemPrompt: "You are a helpful AI assistant. Provide natural, engaging responses to user queries. Keep responses concise and informative. For financial or cryptocurrency questions, include a disclaimer about volatility if relevant."
+          systemPrompt: "You are a helpful AI assistant that provides cryptocurrency analysis.Please keep your response under 200 characters"
         })
       });
 
@@ -163,15 +224,47 @@ const ChatInterface = () => {
         responseText = "Sorry, I couldn't understand the response format. Please try again.";
       }
       
+      // Extract image URL and clean up the text if needed
+      const imageUrl = extractImageUrl(responseText);
+      console.log('Image URL extraction result:', imageUrl);
+      
+      // Validate the image URL
+      let validatedImageUrl = imageUrl;
+      if (imageUrl) {
+        try {
+          console.log('Attempting to validate image URL');
+          const isValid = await testImageUrl(imageUrl);
+          if (!isValid) {
+            console.log('Image validation failed, trying alternative URLs');
+            validatedImageUrl = null;
+          }
+        } catch (err) {
+          console.error('Error validating image URL:', err);
+          validatedImageUrl = null;
+        }
+      }
+      
+      // If we found an image URL, consider removing it from the text
+      // to avoid displaying the raw URL
+      let displayText = responseText;
+      if (validatedImageUrl) {
+        // Remove the raw URL or markdown image syntax from displayed text
+        displayText = responseText.replace(new RegExp(`!\\[.*?\\]\\(${validatedImageUrl}\\)`, 'i'), '')
+                                 .replace(validatedImageUrl, '')
+                                 .trim();
+        console.log('Cleaned display text after removing image URL');
+      }
+      
       // Add bot response
       const botMessage = {
         id: messages.length + 2,
-        text: responseText,
-        sender: 'bot'
+        text: displayText || responseText, // Use cleaned text if available
+        sender: 'bot',
+        imageUrl: validatedImageUrl
       };
       
       setMessages(prevMessages => [...prevMessages, botMessage]);
-      console.log('Bot message added to chat');
+      console.log('Bot message added to chat', validatedImageUrl ? 'with image' : 'without image');
     } catch (error) {
       console.error('Error fetching response:', error);
       console.error('Error details:', {
@@ -341,6 +434,36 @@ const ChatInterface = () => {
                     {message.text.split('\n\n').map((paragraph, i) => (
                       <p key={i}>{paragraph}</p>
                     ))}
+                    {message.imageUrl && (
+                      <div className="image-container">
+                        <img 
+                          src={message.imageUrl} 
+                          alt="Response image" 
+                          className="response-image"
+                          loading="lazy"
+                          onLoad={() => {
+                            console.log('Image loaded successfully:', message.imageUrl);
+                          }}
+                          onError={(e) => {
+                            console.error('Image failed to load:', message.imageUrl);
+                            // Try with a CORS proxy as fallback
+                            if (!e.target.src.includes('cors-anywhere') && !e.target.src.includes('proxy')) {
+                              console.log('Retrying with CORS proxy');
+                              // Try with a different CORS proxy
+                              e.target.src = `https://api.allorigins.win/raw?url=${encodeURIComponent(message.imageUrl)}`;
+                            } else {
+                              // If proxy also fails, hide the image container
+                              const container = e.target.parentNode;
+                              if (container) {
+                                container.style.display = 'none';
+                              }
+                            }
+                          }}
+                          onClick={() => window.open(message.imageUrl, '_blank')}
+                        />
+                        <div className="image-caption">Click to open image in full size</div>
+                      </div>
+                    )}
                   </div>
                 }
               </div>

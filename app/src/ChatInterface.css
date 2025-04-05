@@ -124,6 +124,41 @@
   margin-top: 12px;
 }
 
+.image-container {
+  margin-top: 15px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  background-color: rgba(30, 30, 30, 0.5);
+  border-radius: 12px;
+  padding: 10px;
+}
+
+.response-image {
+  max-width: 100%;
+  max-height: 300px;
+  border-radius: 8px;
+  display: block;
+  object-fit: contain;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease;
+  cursor: pointer;
+}
+
+.response-image:hover {
+  transform: scale(1.02);
+}
+
+.image-caption {
+  margin-top: 8px;
+  font-size: 0.75rem;
+  color: #aaaaaa;
+  text-align: center;
+}
+
 .chat-input-wrapper {
   margin-top: auto;
   width: 100%;
