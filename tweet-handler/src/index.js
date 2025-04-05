@@ -955,7 +955,7 @@ async function setupRealtimeSubscription() {
           
           if (twitterCredentials) {
             console.log('Found Twitter credentials for agent:', agentId);
-            const tweetContent = payload.new.tweet_content;
+            let tweetContent = payload.new.tweet_content;
             
             if (!tweetContent) {
               console.error('Tweet content is empty or missing');
@@ -966,7 +966,10 @@ async function setupRealtimeSubscription() {
               return;
             }
             
-            console.log('Tweet content:', tweetContent);
+            // Remove any text between <think> tags
+            tweetContent = tweetContent.replace(/<think>.*?<\/think>/gs, '').trim();
+            
+            console.log('Tweet content after removing think tags:', tweetContent);
             
             // Update status to processing
             await supabase

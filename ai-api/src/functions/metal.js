@@ -111,7 +111,7 @@ async function launchToken(name, ticker, merchantAddress) {
 
     // Wait 30 seconds before creating liquidity
     console.log('Token created successfully. Waiting 30 seconds before creating liquidity...');
-    await new Promise(resolve => setTimeout(resolve, 30000));
+    await new Promise(resolve => setTimeout(resolve, 10000));
     
     // Retry logic for creating liquidity
     let liquidityResponse;

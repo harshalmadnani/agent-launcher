@@ -29,7 +29,7 @@ const portfolioAddresses = ["0x0000000000000000000000000000000000000000"]; // De
  */
 const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
   try {
-    const systemContent = `You are a data fetcher. Your role is to identify and fetch the relevant data based on the user's question.
+    const systemContent = `You are a code generator. You have access to the following functions:
 - Social Analysis:
   - fetchSocialData(token) - returns detailed social metrics including:
     * Topic rank and related topics
