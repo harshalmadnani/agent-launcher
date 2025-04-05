@@ -8,23 +8,167 @@ body, html {
   height: 100%;
   width: 100%;
   overflow-x: hidden;
+  overscroll-behavior: none;
 }
 
 .App {
   height: 100vh;
   width: 100vw;
+  display: flex;
+  flex-direction: column;
+  color: var(--text-primary);
+  background-color: var(--dark-bg);
 }
 
 .app-container {
   display: flex;
   height: 100vh;
   overflow: hidden;
+  position: relative;
 }
 
 .main-content {
   flex: 1;
   overflow: hidden;
-  background-color: #121212;
+  background-color: var(--dark-surface);
   position: relative;
   display: flex;
+  flex-direction: column;
+  transition: margin-left var(--transition-normal);
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .app-container {
+    flex-direction: column;
+  }
+  
+  .main-content {
+    height: calc(100vh - 60px);
+  }
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    flex-direction: column;
+  }
+  
+  .main-content {
+    width: 100%;
+    height: calc(100vh - 60px);
+  }
+}
+
+@media (max-width: 480px) {
+  .main-content {
+    height: calc(100vh - 50px);
+  }
+  
+  .auth-section {
+    padding: 16px 12px;
+  }
+  
+  .chat-input {
+    font-size: 15px;
+  }
+  
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+}
+
+/* Add animations for page transitions */
+.fade-enter {
+  opacity: 0;
+}
+
+.fade-enter-active {
+  opacity: 1;
+  transition: opacity var(--transition-normal);
+}
+
+.fade-exit {
+  opacity: 1;
+}
+
+.fade-exit-active {
+  opacity: 0;
+  transition: opacity var(--transition-normal);
+}
+
+/* Component container for transitions */
+.component-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex: 1;
+  position: relative;
+  transition: opacity var(--transition-normal);
+}
+
+/* Loading spinner */
+.component-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  border-top-color: var(--primary-color);
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Improve touch target sizes on mobile */
+@media (hover: none) and (pointer: coarse) {
+  .nav-button, 
+  .auth-button,
+  .qr-button,
+  .send-button {
+    min-height: 44px;
+  }
+  
+  .chat-input {
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+}
+
+/* Fix iOS height issues */
+@supports (-webkit-touch-callout: none) {
+  .App, .app-container, .main-content {
+    height: -webkit-fill-available;
+  }
 }

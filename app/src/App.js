@@ -5,16 +5,46 @@ import Terminal from './terminal';
 import Navbar from './Navbar';
 import { PrivyProvider } from '@privy-io/react-auth';
 import AuthGuard from './AuthGuard';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 function App() {
   // Replace with your actual Privy app ID from your Privy dashboard
   const privyAppId = 'cm2flh2td04ih2tqbk42z7nsz';
   const [activeComponent, setActiveComponent] = useState('chat'); // 'chat', 'agent', or 'terminal'
   const [userAddress, setUserAddress] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Add smooth transitions when switching components
+  useEffect(() => {
+    setIsLoading(true);
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [activeComponent]);
 
   const handleNavigation = (component) => {
     setActiveComponent(component);
+  };
+
+  // Render the active component with transition effects
+  const renderActiveComponent = () => {
+    if (isLoading) {
+      return <div className="component-loading">
+        <div className="loading-spinner"></div>
+      </div>;
+    }
+
+    switch (activeComponent) {
+      case 'chat':
+        return <ChatInterface userAddress={userAddress} />;
+      case 'agent':
+        return <AgentLauncher />;
+      case 'terminal':
+        return <Terminal />;
+      default:
+        return <ChatInterface userAddress={userAddress} />;
+    }
   };
 
   return (
@@ -24,7 +54,9 @@ function App() {
         loginMethods: ['twitter'],
         appearance: {
           theme: 'dark',
-          accentColor: '#676FFF',
+          accentColor: 'var(--primary-color)',
+          logo: 'https://place-hold.it/120x40/5D5FEF/FFFFFF&text=AgentLauncher',
+          modalBackdrop: 'blur',
         },
       }}
     >
@@ -37,12 +69,9 @@ function App() {
           />
           <main className="main-content">
             <AuthGuard>
-              {activeComponent === 'chat' ? 
-                <ChatInterface userAddress={userAddress} /> : 
-                activeComponent === 'agent' ?
-                <AgentLauncher /> :
-                <Terminal />
-              }
+              <div className={`component-container fade-${isLoading ? 'exit' : 'enter'}-active`}>
+                {renderActiveComponent()}
+              </div>
             </AuthGuard>
           </main>
         </div>

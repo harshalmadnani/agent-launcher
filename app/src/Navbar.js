@@ -8,6 +8,7 @@ const Navbar = ({ onNavigate, activeComponent, setUserAddress }) => {
   const [userAddress, setLocalUserAddress] = useState(null);
   const [showQRCode, setShowQRCode] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const qrModalRef = useRef(null);
   
   // Fetch user address from backend when authenticated
@@ -103,6 +104,12 @@ const Navbar = ({ onNavigate, activeComponent, setUserAddress }) => {
     };
   }, []);
 
+  // Close mobile menu when navigation item is clicked
+  const handleNavigationClick = (component) => {
+    onNavigate(component);
+    setMobileMenuOpen(false);
+  };
+
   // Get display name from Twitter or fall back to generic user
   const getUserDisplayName = () => {
     if (!user) return 'User';
@@ -134,104 +141,134 @@ const Navbar = ({ onNavigate, activeComponent, setUserAddress }) => {
   };
 
   return (
-    <nav className="navbar">
-      <ul className="nav-list">
-        <li className={`nav-item ${activeComponent === 'chat' ? 'active' : ''}`}>
-          <button className="nav-button" onClick={() => onNavigate('chat')}>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="nav-icon">
-              <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H4V4h16v12z" fill="currentColor"/>
-            </svg>
-            <span>Chat</span>
-          </button>
-        </li>
-        <li className={`nav-item ${activeComponent === 'agent' ? 'active' : ''}`}>
-          <button className="nav-button" onClick={() => onNavigate('agent')}>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="nav-icon">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-2h2v2zm0-4H9V8h2v4z" fill="currentColor"/>
-            </svg>
-            <span>Agent Launcher</span>
-          </button>
-        </li>
-        <li className={`nav-item ${activeComponent === 'terminal' ? 'active' : ''}`}>
-          <button className="nav-button" onClick={() => onNavigate('terminal')}>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="nav-icon">
-              <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12z" fill="currentColor"/>
-            </svg>
-            <span>Terminal</span>
-          </button>
-        </li>
-      </ul>
-      <div className="auth-section">
-        {!ready ? (
-          <div className="loading-state">Loading...</div>
-        ) : authenticated ? (
-          <div className="user-info">
-            <span className="user-name">{getUserDisplayName()}</span>
-            {userAddress && (
-              <>
-                <span 
-                  className="user-address clickable" 
-                  onClick={copyAddressToClipboard}
-                  title="Click to copy address"
-                >
-                  {formatAddress(userAddress)}
-                  {isCopied && <span className="copy-tooltip">Copied!</span>}
-                </span>
-                <button 
-                  className="qr-button" 
-                  onClick={() => setShowQRCode(true)}
-                  title="Show QR Code"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect width="6" height="6" x="3" y="3" rx="1" />
-                    <rect width="6" height="6" x="15" y="3" rx="1" />
-                    <rect width="6" height="6" x="3" y="15" rx="1" />
-                    <path d="M15 15h6v.01H15z" />
-                    <path d="M15 21h.01v.01H15z" />
-                    <path d="M21 15v6h-6" />
-                  </svg>
-                </button>
-              </>
-            )}
-            <button className="auth-button logout" onClick={logout}>
-              Logout
+    <>
+      {/* Mobile Menu Toggle Button */}
+      <button 
+        className="mobile-menu-button"
+        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+        aria-label="Toggle menu"
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          {mobileMenuOpen ? (
+            <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          ) : (
+            <path d="M4 6H20M4 12H20M4 18H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          )}
+        </svg>
+      </button>
+      
+      {/* Mobile Overlay */}
+      <div 
+        className={`mobile-overlay ${mobileMenuOpen ? 'open' : ''}`}
+        onClick={() => setMobileMenuOpen(false)}
+      ></div>
+      
+      <nav className={`navbar ${mobileMenuOpen ? 'open' : ''}`}>
+        <ul className="nav-list">
+          <li className={`nav-item ${activeComponent === 'chat' ? 'active' : ''}`}>
+            <button className="nav-button" onClick={() => handleNavigationClick('chat')}>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="nav-icon">
+                <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H4V4h16v12z" fill="currentColor"/>
+              </svg>
+              <span>Chat</span>
             </button>
-          </div>
-        ) : (
-          <button className="auth-button login" onClick={login}>
-            Login
-          </button>
-        )}
-      </div>
-
+          </li>
+          <li className={`nav-item ${activeComponent === 'agent' ? 'active' : ''}`}>
+            <button className="nav-button" onClick={() => handleNavigationClick('agent')}>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="nav-icon">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-2h2v2zm0-4H9V8h2v4z" fill="currentColor"/>
+              </svg>
+              <span>Agent Launcher</span>
+            </button>
+          </li>
+          <li className={`nav-item ${activeComponent === 'terminal' ? 'active' : ''}`}>
+            <button className="nav-button" onClick={() => handleNavigationClick('terminal')}>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="nav-icon">
+                <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H4V6h16v12z" fill="currentColor"/>
+              </svg>
+              <span>Terminal</span>
+            </button>
+          </li>
+        </ul>
+        <div className="auth-section">
+          {!ready ? (
+            <div className="loading-state">Loading authentication...</div>
+          ) : authenticated ? (
+            <div className="user-info">
+              <span className="user-name">{getUserDisplayName()}</span>
+              {userAddress && (
+                <>
+                  <div className="address-actions">
+                    <span 
+                      className="user-address clickable" 
+                      onClick={copyAddressToClipboard}
+                      title="Click to copy address"
+                    >
+                      {formatAddress(userAddress)}
+                      {isCopied && <span className="copy-tooltip">Copied!</span>}
+                    </span>
+                    <button 
+                      className="qr-button" 
+                      onClick={() => setShowQRCode(true)}
+                      title="Show QR Code"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect width="6" height="6" x="3" y="3" rx="1" />
+                        <rect width="6" height="6" x="15" y="3" rx="1" />
+                        <rect width="6" height="6" x="3" y="15" rx="1" />
+                        <path d="M15 15h6v.01H15z" />
+                        <path d="M15 21h.01v.01H15z" />
+                        <path d="M21 15v6h-6" />
+                      </svg>
+                    </button>
+                  </div>
+                </>
+              )}
+              <button 
+                className="auth-button logout" 
+                onClick={() => {
+                  logout();
+                  setMobileMenuOpen(false);
+                }}
+              >
+                Logout
+              </button>
+            </div>
+          ) : (
+            <button className="auth-button login" onClick={login}>
+              Login with Twitter
+            </button>
+          )}
+        </div>
+      </nav>
+      
       {/* QR Code Modal */}
       {showQRCode && userAddress && (
         <div className="qr-modal-overlay">
           <div className="qr-modal" ref={qrModalRef}>
             <div className="qr-header">
-              <h3>Deposit ETH on Base</h3>
-              <button className="close-button" onClick={() => setShowQRCode(false)}>×</button>
+              <h3>Wallet Address</h3>
+              <button className="close-button" onClick={() => setShowQRCode(false)}>
+                ×
+              </button>
             </div>
             <div className="qr-content">
-              <QRCodeSVG 
-                value={userAddress}
-                size={200}
-                bgColor={"#ffffff"}
-                fgColor={"#000000"}
-                level={"L"}
-                includeMargin={false}
-              />
+              <QRCodeSVG value={userAddress} size={200} />
               <div className="address-container">
-                <p className="full-address">{userAddress}</p>
+                <div className="full-address">{userAddress}</div>
                 <button className="copy-button" onClick={copyAddressToClipboard}>
-                  {isCopied ? 'Copied!' : 'Copy'}
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                  {isCopied ? 'Copied!' : 'Copy Address'}
                 </button>
               </div>
             </div>
           </div>
         </div>
       )}
-    </nav>
+    </>
   );
 };
 
