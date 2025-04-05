@@ -75,12 +75,6 @@ const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
   - description(token) - returns project description
 
 - Historical Data:
-  - priceHistoryData(token, period) - returns array of {date, price} objects
-  - getHistoricPortfolioData(addresses, period) - returns {wallet, wallets, currentBalance, balanceHistory}
-  Periods can be "1d", "7d", "30d", "1y"
-
-- Wallet Analysis:
-  - getWalletPortfolio(address) - returns detailed wallet information
   - cexs(token) - returns exchange listing information
   - investors(token) - returns detailed investor information
   - distribution(token) - returns token distribution
@@ -114,6 +108,12 @@ const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
   - getProfitAndLoss(walletAddress, chainId, fromTimestamp, toTimestamp) - returns profit and loss
   - getTokenDetails(walletAddress, chainId) - returns token details
   - getNFTsByAddress(address, chainIds) - returns NFTs owned by an address
+
+  -Mobula functions:
+  - fetchMarketData(coinname) - returns market data
+  - fetchMetadata(coinname) - returns metadata
+  - fetchHistoricPortfolioData(from, to, addresses) - returns historic portfolio data
+  - fetchWalletPortfolio(address) - returns wallet portfolio
 IMPORTANT TOKEN ADDRESSES:
 - ETH on any network: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE'
 - USDC on Base: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
@@ -264,6 +264,7 @@ const executeCode = async (code) => {
       ...require('../functions/swap'),
       // Utility functions
       ...require('../functions/mobula'),
+      ...require('../functions/token'),
       console: {
         log: (...args) => console.log(...args),
         error: (...args) => console.error(...args)

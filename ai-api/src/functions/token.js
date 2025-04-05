@@ -7,7 +7,7 @@ const {
     fetchTopicNews
   } = require('./mobula');
   
-  const { getTokenName } = require('../utils/calculationUtils');
+  const { getTokenName } = require('./calculationUtils');
   
   // Constants
   const TIME_PERIODS = {

@@ -3,7 +3,7 @@ const axios = require('axios');
 async function testAnalyzeQuery() {
   try {
     const response = await axios.post('http://localhost:3000/analyze', {
-      query: "Create a portfolio image for wallet 0xa5F8A22D2ee33281ca772f0eB18C04A32314bf6B",
+      query: "SOL metadata (use fetchmetadata function)",
       systemPrompt: "You are a helpful AI assistant that provides cryptocurrency analysis.Please keep your response under 200 characters",
       model: "deepseek-r1-distill-llama-70b"
     });
