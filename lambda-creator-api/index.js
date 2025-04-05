@@ -141,7 +141,7 @@ exports.handler = async (event) => {
     try {
         // Get last 5 posts before making the analysis call
         const lastPosts = await getLastFivePosts();
-        const enhancedSystemPrompt = '${systemPrompt.replace(/'/g, "\\'")}\\n If there is an error in data, dont mention the error in your post and instead just tweet about somethig relevant to your character prompt. Dont repeat the content of your last 10 posts,Your last 10 posts are:\\n' + lastPosts;
+        const enhancedSystemPrompt = '${systemPrompt.replace(/'/g, "\\'")}\\n If there is an error in data, dont mention the error in your post and instead just tweet about somethig relevant to your character prompt. keep your tweet under 200 characters.Dont repeat the content of your last 10 posts,Your last 10 posts are:\\n' + lastPosts;
         console.log('Calling analysis API with query:', 'Make a tweet about${query.replace(/'/g, "\\'")}');
         
         // Call the analysis API using fetch
@@ -183,6 +183,11 @@ exports.handler = async (event) => {
                 }
             } else {
                 description = String(data);
+            }
+            
+            // Remove content within <think> tags
+            if (typeof description === 'string') {
+                description = description.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
             }
             
             // Ensure description is a string and not too large
