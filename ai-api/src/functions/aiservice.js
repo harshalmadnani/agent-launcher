@@ -249,7 +249,7 @@ const characterAPI = async (userInput, executedData, systemPrompt, model = 'deep
     const messages = [
       {
         role: "system",
-        content: `${systemPrompt} Always return the Supabase URL if it's included in the data.`
+        content: `${systemPrompt} Always return the Supabase URL if it's included in the data.if not no need to mention it`
       },
       {
         role: "user",
