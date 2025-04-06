@@ -11,7 +11,10 @@ const {
   getNFTsByAddress,
   uploadChartToSupabase,
   generateAndUploadPortfolioChart,
-  getGenerateAndUploadPortfolioChart
+  getGenerateAndUploadPortfolioChart,
+  getPortfolioBreakdown,
+  generatePortfolioPieChart,
+  supabase
 } = require('./1inch');
 
 // For Supabase testing
@@ -19,7 +22,7 @@ const { createClient } = require('@supabase/supabase-js');
 
 // Test address and chain ID
 const TEST_ADDRESS = "0x7E3bBf75aba09833f899bB1FDd917FC3A5617555";
-const CHAIN_ID = "8453"; // Base chain
+const CHAIN_ID = 8453; // Base chain (as number, not string)
 
 // Timestamps for PnL testing
 const FROM_TIMESTAMP = "2023-01-01T00:00:00Z";
@@ -30,12 +33,9 @@ const DEFAULT_CHAIN_IDs = [1, 137, 8453, 42161, 43114, 8217];
 
 // Supabase configuration - using service role key to bypass RLS policies
 const SUPABASE_URL = "https://wbsnlpviggcnwqfyfobh.supabase.co";
-const SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indic25scHZpZ2djbndxZnlmb2JoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczODc2NTcwNiwiZXhwIjoyMDU0MzQxNzA2fQ.tr6PqbiAXQYSQSpG2wS6I4DZfV1Gc3dLXYhKwBrJLS0";
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indic25scHZpZ2djbndxZnlmb2JoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczODc2NTcwNiwiZXhwIjoyMDU0MzQxNzA2fQ.tr6PqbiAXQYSQSpG2wS6I4DZfV1Gc3dLXYhKwBrJLS0";
 
 console.log("Supabase URL:", SUPABASE_URL);
-
-// Initialize Supabase client with service role key to bypass RLS policies
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 async function testEndpoint(name, fn, ...args) {
   try {
@@ -50,6 +50,42 @@ async function testEndpoint(name, fn, ...args) {
       message: error.message,
       url: error.config?.url
     });
+    return false;
+  }
+}
+
+async function testPortfolioBreakdown() {
+  try {
+    console.log("\nTesting Portfolio Breakdown...");
+    console.log(`Test Address: ${TEST_ADDRESS}`);
+    console.log(`Chain ID: ${CHAIN_ID}`);
+    
+    const result = await getPortfolioBreakdown(TEST_ADDRESS, CHAIN_ID);
+    
+    if (!result.success) {
+      console.error("Failed to get portfolio breakdown:", result.error);
+      return false;
+    }
+    
+    console.log("\nPortfolio Breakdown Results:");
+    console.log(`Total Portfolio Value: $${result.totalValueUsd.toFixed(2)}`);
+    
+    if (result.pieChartUrl) {
+      console.log(`\nPie Chart URL: ${result.pieChartUrl}`);
+    }
+    
+    console.log("\nToken Allocation:");
+    result.breakdown.forEach(token => {
+      console.log(`\n${token.symbol} (${token.name}):`);
+      console.log(`  Value: $${token.valueUsd.toFixed(2)}`);
+      console.log(`  Percentage: ${token.percentage}%`);
+      console.log(`  Balance: ${token.balance}`);
+      console.log(`  Address: ${token.tokenAddress}`);
+    });
+    
+    return true;
+  } catch (error) {
+    console.error("Error in portfolio breakdown test:", error);
     return false;
   }
 }
@@ -82,65 +118,6 @@ async function testChartGeneration() {
   }
 }
 
-// Override the uploadChartToSupabase function to use portfolio bucket
-async function customUploadChartToSupabase(supabase, imagePath) {
-  try {
-    const bucketName = 'portfolio';
-    
-    // Read the file from the file system
-    const fs = require('fs');
-    const path = require('path');
-    const fileBuffer = fs.readFileSync(imagePath);
-    const fileExt = path.extname(imagePath);
-    const fileName = `charts/${Date.now()}${fileExt}`;
-    
-    // First check if the path exists and create it if needed
-    try {
-      const { data: folders, error: folderError } = await supabase
-        .storage
-        .from(bucketName)
-        .list('charts');
-      
-      if (folderError && folderError.message !== 'The resource was not found') {
-        console.log("Folder check error:", folderError.message);
-      }
-    } catch (e) {
-      console.log("Folder check failed:", e.message);
-    }
-    
-    // Use direct API access with service role key for upload
-    console.log(`Uploading to ${bucketName}/${fileName}...`);
-    const { error: uploadError, data } = await supabase.storage
-      .from(bucketName)
-      .upload(fileName, fileBuffer, {
-        contentType: 'image/png',
-        cacheControl: '3600',
-        upsert: true
-      });
-    
-    if (uploadError) {
-      console.error("Upload error details:", uploadError);
-      throw uploadError;
-    }
-    
-    // Construct the direct storage URL using the correct format
-    const storageUrl = `https://wbsnlpviggcnwqfyfobh.supabase.co/storage/v1/object/public/${bucketName}/${fileName}`;
-    
-    return {
-      success: true,
-      publicUrl: storageUrl,
-      fileName,
-      data
-    };
-  } catch (error) {
-    console.error('Error uploading to Supabase:', error);
-    return {
-      success: false,
-      error: error.message
-    };
-  }
-}
-
 async function testSupabaseUpload() {
   try {
     console.log("\nTesting Supabase Upload...");
@@ -159,10 +136,7 @@ async function testSupabaseUpload() {
     const data = await getPortfolioValueChart(TEST_ADDRESS, CHAIN_ID, "1day");
     const chartPath = await generatePortfolioChart(data, 'portfolio_chart_upload.png');
     
-    const uploadResult = await customUploadChartToSupabase(
-      supabase,
-      chartPath
-    );
+    const uploadResult = await uploadChartToSupabase(supabase, chartPath, 'portfolio');
     
     console.log("Upload result:", JSON.stringify(uploadResult, null, 2));
     
@@ -173,9 +147,10 @@ async function testSupabaseUpload() {
     const oneStepChartPath = await generatePortfolioChart(portfolioData, 'portfolio_chart_one_step.png');
     
     // Upload with custom uploader
-    const uploadStepTwoResult = await customUploadChartToSupabase(
+    const uploadStepTwoResult = await uploadChartToSupabase(
       supabase,
-      oneStepChartPath
+      oneStepChartPath,
+      'portfolio'
     );
     
     console.log("Combined result:", {
@@ -207,7 +182,6 @@ async function testCombinedFunction() {
       
       try {
         const url = await getGenerateAndUploadPortfolioChart(
-          supabase,
           TEST_ADDRESS,
           CHAIN_ID,
           timerange
@@ -264,37 +238,34 @@ async function testAllEndpoints() {
       CHAIN_ID
     ),
     nfts: await testEndpoint(
-      "NFTs by Address",
+      "NFTs",
       getNFTsByAddress,
       TEST_ADDRESS,
       DEFAULT_CHAIN_IDs
     ),
+    portfolioBreakdown: await testPortfolioBreakdown(),
     chartGeneration: await testChartGeneration(),
     supabaseUpload: await testSupabaseUpload(),
     combinedFunction: await testCombinedFunction()
   };
 
-  console.log("\nTest Summary:");
-  console.log("----------------------------------------");
-  Object.entries(results).forEach(([endpoint, success]) => {
-    console.log(`${endpoint}: ${success ? "✅ Success" : "❌ Failed"}`);
+  console.log("\nTest Results Summary:");
+  Object.entries(results).forEach(([test, success]) => {
+    console.log(`${test}: ${success ? "✅ PASS" : "❌ FAIL"}`);
   });
-  console.log("----------------------------------------");
 
-  const totalEndpoints = Object.keys(results).length;
-  const successfulEndpoints = Object.values(results).filter(Boolean).length;
-  console.log(`\nTest Results: ${successfulEndpoints}/${totalEndpoints} endpoints successful`);
+  return Object.values(results).every(result => result);
 }
 
 // Run the test and provide summary
-testCombinedFunction()
+testAllEndpoints()
   .then(success => {
     console.log("\n----------------------------------------");
-    console.log(`Test ${success ? '✅ Passed' : '❌ Failed'}`);
+    console.log(`Overall Test Result: ${success ? "✅ ALL TESTS PASSED" : "❌ SOME TESTS FAILED"}`);
     console.log("----------------------------------------");
     process.exit(success ? 0 : 1);
   })
   .catch(error => {
-    console.error("Unexpected error:", error);
+    console.error("\n❌ Error running tests:", error);
     process.exit(1);
   });

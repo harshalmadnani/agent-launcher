@@ -66,11 +66,15 @@ async function getPortfolioValueChart(addresses, chainId = 1, timerange = "1mont
   // Convert timerange if using short format
   const apiTimerange = timerangeMap[timerange] || timerange;
   
+  // Ensure addresses is an array and chainId is a string
+  const formattedAddresses = Array.isArray(addresses) ? addresses : [addresses];
+  const formattedChainId = chainId.toString();
+  
   return makeApiRequest('/general/value_chart', {
-    addresses: Array.isArray(addresses) ? addresses : [addresses],
-    chain_id: chainId.toString(),
+    addresses: formattedAddresses,
+    chain_id: formattedChainId,
     timerange: apiTimerange,
-    use_cache: useCache.toString() // Convert boolean to string
+    use_cache: useCache.toString()
   });
 }
 
@@ -261,7 +265,7 @@ async function getGenerateAndUploadPortfolioChart(addresses, chainId, timerange 
   try {
     // Hardcoded Supabase credentials
     const supabaseUrl = 'https://wbsnlpviggcnwqfyfobh.supabase.co';
-    const supabaseKey = process.env.SUPABASE_SERVICE_KEY || 'your-service-key-here';
+    const supabaseKey = process.env.SUPABASE_SERVICE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indic25scHZpZ2djbndxZnlmb2JoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczODc2NTcwNiwiZXhwIjoyMDU0MzQxNzA2fQ.tr6PqbiAXQYSQSpG2wS6I4DZfV1Gc3dLXYhKwBrJLS0';
     const supabase = createClient(supabaseUrl, supabaseKey);
     
     // Get the portfolio data
@@ -559,6 +563,209 @@ async function testSupabaseUpload() {
   }
 }
 
+// Generate pie chart from portfolio breakdown data
+async function generatePortfolioPieChart(breakdownData, outputPath = 'portfolio_pie_chart.png') {
+  try {
+    // Create canvas
+    const width = 1200;
+    const height = 600;
+    const canvas = createCanvas(width, height);
+    const ctx = canvas.getContext('2d');
+    
+    // Set background
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, width, height);
+
+    // Check if data is valid
+    if (!breakdownData || !breakdownData.breakdown || !Array.isArray(breakdownData.breakdown)) {
+      throw new Error('Invalid breakdown data format');
+    }
+
+    if (!breakdownData.breakdown.length) {
+      throw new Error('No portfolio data available for pie chart');
+    }
+
+    // Prepare data for chart
+    const labels = breakdownData.breakdown.map(token => `${token.symbol} (${token.percentage}%)`);
+    const values = breakdownData.breakdown.map(token => token.valueUsd);
+    
+    // Generate colors for each token
+    const colors = breakdownData.breakdown.map((_, index) => {
+      const hue = (index * 137.508) % 360; // Golden angle approximation
+      return `hsl(${hue}, 70%, 60%)`;
+    });
+
+    // Create chart
+    const chart = new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: labels,
+        datasets: [{
+          data: values,
+          backgroundColor: colors,
+          borderColor: 'white',
+          borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: false,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          title: {
+            display: true,
+            text: `Portfolio Breakdown - Total Value: $${breakdownData.totalValueUsd.toFixed(2)}`,
+            font: {
+              size: 16,
+              weight: 'bold'
+            }
+          },
+          legend: {
+            display: true,
+            position: 'right',
+            labels: {
+              font: {
+                size: 12
+              }
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: function(context) {
+                const token = breakdownData.breakdown[context.dataIndex];
+                return [
+                  `${token.symbol} (${token.name})`,
+                  `Value: $${token.valueUsd.toFixed(2)}`,
+                  `Percentage: ${token.percentage}%`,
+                  `Balance: ${token.balance}`
+                ];
+              }
+            }
+          }
+        }
+      }
+    });
+    
+    // Render the chart
+    chart.render();
+
+    // Save the chart as PNG
+    const buffer = canvas.toBuffer('image/png');
+    fs.writeFileSync(outputPath, buffer);
+    console.log(`Pie chart saved to ${outputPath}`);
+    return outputPath;
+  } catch (error) {
+    console.error('Error generating pie chart:', error);
+    throw error;
+  }
+}
+
+// Get portfolio token breakdown with percentages and generate pie chart
+async function getPortfolioBreakdown(walletAddress, chainId) {
+  try {
+    console.log("\nFetching portfolio breakdown...");
+    console.log(`Wallet Address: ${walletAddress}`);
+    console.log(`Chain ID: ${chainId}`);
+    
+    // Get token details first
+    const tokenData = await getTokenDetails(walletAddress, chainId);
+    console.log("Token details fetched successfully");
+    
+    if (!tokenData.result || !Array.isArray(tokenData.result)) {
+      throw new Error('Invalid token data received');
+    }
+
+    // Calculate total portfolio value
+    const totalValue = tokenData.result.reduce((sum, token) => {
+      const value = parseFloat(token.value_usd || 0);
+      console.log(`Token ${token.symbol} value: $${value}`);
+      return sum + value;
+    }, 0);
+
+    console.log(`Total Portfolio Value: $${totalValue.toFixed(2)}`);
+
+    if (totalValue <= 0) {
+      console.log("Portfolio has no value or invalid value");
+      return {
+        success: false,
+        error: 'Portfolio has no value or invalid value',
+        breakdown: [],
+        totalValueUsd: 0
+      };
+    }
+
+    // Calculate percentage for each token
+    const breakdown = tokenData.result
+      .map(token => {
+        const valueUsd = parseFloat(token.value_usd || 0);
+        const percentage = (valueUsd / totalValue) * 100;
+        console.log(`\nToken: ${token.symbol} (${token.name})`);
+        console.log(`  Value: $${valueUsd.toFixed(2)}`);
+        console.log(`  Percentage: ${percentage.toFixed(2)}%`);
+        console.log(`  Balance: ${token.amount}`);
+        console.log(`  Address: ${token.contract_address}`);
+        
+        return {
+          symbol: token.symbol,
+          name: token.name,
+          valueUsd: valueUsd,
+          percentage: Math.round(percentage * 100) / 100,
+          balance: token.amount,
+          tokenAddress: token.contract_address
+        };
+      })
+      // Sort by percentage descending
+      .sort((a, b) => b.percentage - a.percentage)
+      // Filter out tokens with 0 value
+      .filter(token => token.valueUsd > 0);
+
+    console.log("\nPortfolio Breakdown Summary:");
+    breakdown.forEach(token => {
+      console.log(`${token.symbol}: ${token.percentage}% ($${token.valueUsd.toFixed(2)})`);
+    });
+
+    // Generate pie chart
+    console.log("\nGenerating pie chart...");
+    const pieChartPath = await generatePortfolioPieChart({
+      breakdown,
+      totalValueUsd: totalValue
+    });
+
+    // Upload pie chart to Supabase
+    console.log("Uploading pie chart to Supabase...");
+    const uploadResult = await uploadChartToSupabase(supabase, pieChartPath, 'portfolio');
+    
+    if (!uploadResult.success) {
+      console.error("Failed to upload pie chart:", uploadResult.error);
+    } else {
+      console.log("Pie chart uploaded successfully:", uploadResult.publicUrl);
+    }
+
+    return {
+      success: true,
+      breakdown,
+      totalValueUsd: totalValue,
+      pieChartUrl: uploadResult.success ? uploadResult.publicUrl : null,
+      meta: tokenData.meta
+    };
+  } catch (error) {
+    console.error('Error in getPortfolioBreakdown:', error);
+    return {
+      success: false,
+      error: error.message,
+      breakdown: [],
+      totalValueUsd: 0,
+      pieChartUrl: null
+    };
+  }
+}
+
+// Initialize Supabase client
+const supabase = createClient(
+  "https://wbsnlpviggcnwqfyfobh.supabase.co",
+  process.env.SUPABASE_SERVICE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indic25scHZpZ2djbndxZnlmb2JoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczODc2NTcwNiwiZXhwIjoyMDU0MzQxNzA2fQ.tr6PqbiAXQYSQSpG2wS6I4DZfV1Gc3dLXYhKwBrJLS0"
+);
+
 module.exports = {
   getPortfolioValueChart,
   safeGetPortfolioValueChart,
@@ -566,5 +773,7 @@ module.exports = {
   getProfitAndLoss,
   getTokenDetails,
   getNFTsByAddress,
-  getGenerateAndUploadPortfolioChart
+  getGenerateAndUploadPortfolioChart,
+  getPortfolioBreakdown,
+  supabase
 };

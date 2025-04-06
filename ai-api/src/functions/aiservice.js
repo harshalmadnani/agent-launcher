@@ -107,6 +107,9 @@ const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
   - getProfitAndLoss(walletAddress, chainId, fromTimestamp, toTimestamp) - returns profit and loss
   - getTokenDetails(walletAddress, chainId) - returns token details
   - getNFTsByAddress(address, chainIds) - returns NFTs owned by an address
+  - getPortfolioBreakdown(walletAddress, chainId) - returns portfolio breakdown
+  - getPortfolioValueChart(walletAddress, chainId, timerange) - returns portfolio value chart
+
 
   -Mobula functions:
   - fetchMarketData(coinname) - returns market data
@@ -114,7 +117,7 @@ const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
   - fetchHistoricPortfolioData(from, to, addresses) - returns historic portfolio data
   - fetchWalletPortfolio(address) - returns wallet portfolio
 -Transfer functions:
-  - transferWithUsernames(fromUsername, toUsername, amount) - transfers ETH between two users
+  - transferWithUsernames(fromUsername, toUsername, amount) - transfers ETH between two users with usernames (use this when the address is not mentioned but username is mentioned)
   - transfer(toAddress, amount, fromAddress) - transfers ETH between two addresses
 
   -Metal functions:
@@ -309,8 +312,7 @@ const executeCode = async (code) => {
 
     console.log('Starting code execution with cleaned code:', {
       codeLength: cleanCode.length,
-      firstLine: cleanCode.split('\n')[0],
-      lastLine: cleanCode.split('\n').pop()
+      fullCode: cleanCode
     });
 
     // Create a safe context with allowed functions
