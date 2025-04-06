@@ -66,6 +66,13 @@ const dataAPI = async (userInput, model = 'deepseek-r1-distill-llama-70b') => {
   - totalSupply(token) - returns total supply
   - circulatingSupply(token) - returns circulating supply
 
+Example format 
+\`\`\`javascript
+const data = {
+  currentPrice: await price("bitcoin"),
+};
+return data;
+\`\`\`
 - Social/Info:
   - website(token) - returns official website URL
   - twitter(token) - returns Twitter handle
